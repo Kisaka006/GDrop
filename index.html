@@ -1105,7 +1105,7 @@
 
       <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs mb-6">
         <div class="flex justify-between"><span class="text-slate-500">Legal Name:</span> <strong id="acc-details-name" class="text-slate-800">Otieno George</strong></div>
-        <div class="flex justify-between"><span class="text-slate-500">Standardized Phone:</span> <strong id="acc-details-phone" class="text-slate-800 font-mono">+254712345678</strong></div>
+        <div class="flex justify-between"><span class="text-slate-500">Verified Phone:</span> <strong id="acc-details-phone" class="text-slate-800 font-mono">+254712345678</strong></div>
         <div class="flex justify-between"><span class="text-slate-500">Email Address:</span> <strong id="acc-details-email" class="text-slate-800">george@gdrop.co.ke</strong></div>
         <div class="flex justify-between"><span class="text-slate-500">Role Status:</span> <span id="acc-details-role" class="px-2 py-0.5 rounded font-bold text-[10px] bg-brand-100 text-brand-800 uppercase">Customer</span></div>
         <div class="flex justify-between"><span class="text-slate-500">ODPC Consent:</span> <span class="text-emerald-700 font-bold"><i class="fa-solid fa-check"></i> Granted (2019 Act)</span></div>
@@ -1171,8 +1171,8 @@
       
       <div>
         <span class="text-[10px] uppercase font-bold text-mpesa tracking-wider">Safaricom Daraja API • Homa Bay</span>
-        <h3 class="font-display font-bold text-lg text-slate-900 mt-0.5">M-Pesa STK Push Initiated</h3>
-        <p class="text-xs text-slate-500 mt-1">Enter your M-Pesa PIN on the handset dialog to authorize payment.</p>
+        <h3 id="mpesa-modal-title" class="font-display font-bold text-lg text-slate-900 mt-0.5">M-Pesa Payment</h3>
+        <p id="mpesa-modal-description" class="text-xs text-slate-500 mt-1">Your verified phone number will receive the payment prompt.</p>
       </div>
 
       <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2 text-left">
@@ -1182,7 +1182,7 @@
       </div>
 
       <div id="mpesa-modal-prompt" class="bg-slate-900 text-white p-3 rounded-xl text-left text-[11px] font-mono border border-slate-700 animate-pulse">
-        Do you want to pay KES 0.00 to GDROP CONCIERGE HOMA BAY? Enter PIN: ****
+        Waiting for payment provider...
       </div>
       <p id="mpesa-modal-status" class="text-[11px] text-slate-500"></p>
 
@@ -2461,8 +2461,14 @@
         this.pendingPayment = { ...payment, orderId: order.id };
         document.getElementById('mpesa-modal-amount').innerText = kes(payment.amount);
         document.getElementById('mpesa-modal-ref').innerText = order.id;
-        document.getElementById('mpesa-modal-prompt').innerText = `Do you want to pay KES ${Number(payment.amount).toFixed(2)} to GDROP CONCIERGE HOMA BAY Account ${order.id}? Enter PIN: ****`;
         const sim = payment.mode === 'simulation';
+        document.getElementById('mpesa-modal-title').innerText = sim ? 'M-Pesa Simulation' : 'M-Pesa Prompt Sent';
+        document.getElementById('mpesa-modal-description').innerText = sim
+          ? 'No payment will be made. Configure Daraja credentials to send a real STK prompt.'
+          : `Check your verified phone ${payment.phone} and enter your M-Pesa PIN on your handset.`;
+        document.getElementById('mpesa-modal-prompt').innerText = sim
+          ? `Simulation only — KES ${Number(payment.amount).toFixed(0)} for order ${order.id}. No STK prompt was sent.`
+          : `STK push accepted for ${payment.phone}. Confirm KES ${Number(payment.amount).toFixed(0)} on your phone.`;
         document.getElementById('mpesa-sim-btn').classList.toggle('hidden', !sim);
         document.getElementById('mpesa-dismiss-label').innerText = sim ? 'Dismiss / Abort Transaction' : 'Close — I will pay later';
         document.getElementById('mpesa-modal-status').innerText = sim

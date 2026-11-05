@@ -19,7 +19,7 @@ db.exec(`
     id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
     phone TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL,
     national_id TEXT, plate TEXT, license_no TEXT, vetting_status TEXT,
-    odpc_consent_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+    odpc_consent_at INTEGER NOT NULL, phone_verified_at INTEGER, created_at INTEGER NOT NULL
   );
   CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -56,6 +56,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(status, created_at);
   CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id);
 `);
+const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map((column) => column.name));
+if (!userColumns.has('phone_verified_at')) {
+  db.exec('ALTER TABLE users ADD COLUMN phone_verified_at INTEGER');
+  db.exec('UPDATE users SET phone_verified_at = created_at WHERE phone_verified_at IS NULL');
+}
 
 const tariff = {
   baseFare: 150,
@@ -116,6 +121,11 @@ function mpesaPhone(phone) {
   return digits;
 }
 
+function normalizedKenyanPhone(phone) {
+  const digits = String(phone).replace(/\D/g, '');
+  return digits.startsWith('254') ? `+${digits}` : `+254${digits.slice(1)}`;
+}
+
 function hashPassword(password) {
   const salt = crypto.randomBytes(16);
   const derived = crypto.scryptSync(password, salt, 64);
@@ -137,6 +147,7 @@ function publicUser(user) {
     email: user.email,
     phone: user.phone,
     role: user.role,
+    phoneVerified: !!user.phone_verified_at,
     nationalId: user.national_id || null,
     plate: user.plate || null,
     licenseNo: user.license_no || null,
@@ -265,12 +276,12 @@ function ensureDemoAccounts() {
   ];
   const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users
-    (id, name, email, phone, password_hash, role, national_id, plate, license_no, vetting_status, odpc_consent_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, name, email, phone, password_hash, role, national_id, plate, license_no, vetting_status, odpc_consent_at, phone_verified_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const user of seeds) {
     insertUser.run(id('usr'), user.name, user.email, user.phone, hashPassword(user.password), user.role,
-      user.nationalId || null, user.plate || null, user.licenseNo || null, user.vettingStatus || null, now(), now());
+      user.nationalId || null, user.plate || null, user.licenseNo || null, user.vettingStatus || null, now(), now(), now());
   }
   const customer = db.prepare('SELECT id FROM users WHERE email = ?').get('george@gdrop.co.ke');
   const rider = db.prepare('SELECT id FROM users WHERE email = ?').get('jared@gdrop.co.ke');
@@ -298,61 +309,121 @@ async function sendOtp(phone, code) {
   const hasUsername = !!process.env.AT_USERNAME;
   if (!hasApiKey && !hasUsername) return false;
   if (!hasApiKey || !hasUsername) fail(503, 'Africa\'s Talking configuration is incomplete.', 'SMS_CONFIG_INCOMPLETE');
-  const response = await fetch('https://api.africastalking.com/version1/messaging', {
-    method: 'POST',
-    headers: {
-      apiKey: process.env.AT_API_KEY,
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      username: process.env.AT_USERNAME,
-      to: phone,
-      message: `Your GDrop verification code is ${code}. It expires in 10 minutes.`,
-      ...(process.env.AT_SENDER_ID ? { from: process.env.AT_SENDER_ID } : {}),
-    }),
-  });
-  if (!response.ok) throw new HttpError(502, 'The SMS provider could not send your verification code.', 'SMS_FAILED');
+  let response;
+  let result;
+  try {
+    response = await fetch('https://api.africastalking.com/version1/messaging', {
+      method: 'POST',
+      headers: {
+        apiKey: process.env.AT_API_KEY,
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        username: process.env.AT_USERNAME,
+        to: phone,
+        message: `Your GDrop verification code is ${code}. It expires in 10 minutes.`,
+        ...(process.env.AT_SENDER_ID ? { from: process.env.AT_SENDER_ID } : {}),
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    result = await response.json();
+  } catch {
+    throw new HttpError(502, 'Could not reach the SMS provider. Please try again.', 'SMS_UNAVAILABLE');
+  }
+  const recipients = result.SMSMessageData?.Recipients;
+  const smsAccepted = Array.isArray(recipients) && recipients.length > 0 &&
+    recipients.every((recipient) => /^10[0-2]$/.test(String(recipient.statusCode)));
+  if (!response.ok || !smsAccepted) {
+    throw new HttpError(502, 'The SMS provider did not accept the verification message.', 'SMS_FAILED');
+  }
   return true;
 }
 
 async function mpesaRequest(order, payment) {
   const keys = ['MPESA_CONSUMER_KEY', 'MPESA_CONSUMER_SECRET', 'MPESA_SHORTCODE', 'MPESA_PASSKEY', 'MPESA_CALLBACK_URL', 'MPESA_CALLBACK_TOKEN'];
   const configured = keys.filter((key) => process.env[key]).length;
-  if (!configured) return { mode: 'simulation', status: 'PENDING' };
+  if (!configured) {
+    if (process.env.NODE_ENV === 'production') {
+      fail(503, 'M-Pesa is not configured for this service.', 'MPESA_CONFIG_REQUIRED');
+    }
+    return { mode: 'simulation', status: 'PENDING' };
+  }
   if (configured !== keys.length) fail(503, 'M-Pesa configuration is incomplete.', 'MPESA_CONFIG_INCOMPLETE');
+  if (process.env.MPESA_ENV && !['sandbox', 'production'].includes(process.env.MPESA_ENV)) {
+    fail(503, 'MPESA_ENV must be either sandbox or production.', 'MPESA_CONFIG_INVALID');
+  }
+  const transactionType = process.env.MPESA_TRANSACTION_TYPE || 'CustomerPayBillOnline';
+  if (!['CustomerPayBillOnline', 'CustomerBuyGoodsOnline'].includes(transactionType)) {
+    fail(503, 'MPESA_TRANSACTION_TYPE must be CustomerPayBillOnline or CustomerBuyGoodsOnline.', 'MPESA_CONFIG_INVALID');
+  }
+  let callbackUrl;
+  try {
+    callbackUrl = new URL(process.env.MPESA_CALLBACK_URL);
+  } catch {
+    fail(503, 'M-Pesa callback URL is invalid.', 'MPESA_CONFIG_INVALID');
+  }
+  if (process.env.NODE_ENV === 'production' && callbackUrl.protocol !== 'https:') {
+    fail(503, 'M-Pesa callback URL must use HTTPS in production.', 'MPESA_CONFIG_INVALID');
+  }
   const host = process.env.MPESA_ENV === 'production'
     ? 'https://api.safaricom.co.ke'
     : 'https://sandbox.safaricom.co.ke';
   const basic = Buffer.from(`${process.env.MPESA_CONSUMER_KEY}:${process.env.MPESA_CONSUMER_SECRET}`).toString('base64');
-  const authResponse = await fetch(`${host}/oauth/v1/generate?grant_type=client_credentials`, {
-    headers: { Authorization: `Basic ${basic}` },
-  });
-  const auth = await authResponse.json();
+  let authResponse;
+  let auth;
+  try {
+    authResponse = await fetch(`${host}/oauth/v1/generate?grant_type=client_credentials`, {
+      headers: { Authorization: `Basic ${basic}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    auth = await authResponse.json();
+  } catch {
+    throw new HttpError(502, 'Could not reach M-Pesa. Please try again.', 'MPESA_UNAVAILABLE');
+  }
   if (!authResponse.ok || !auth.access_token) throw new HttpError(502, 'Could not authenticate with M-Pesa.', 'MPESA_AUTH_FAILED');
-  const timestamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+  const timestampParts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Nairobi',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date()).reduce((parts, part) => {
+    if (part.type !== 'literal') parts[part.type] = part.value;
+    return parts;
+  }, {});
+  const timestamp = `${timestampParts.year}${timestampParts.month}${timestampParts.day}${timestampParts.hour}${timestampParts.minute}${timestampParts.second}`;
   const password = Buffer.from(`${process.env.MPESA_SHORTCODE}${process.env.MPESA_PASSKEY}${timestamp}`).toString('base64');
-  const callbackUrl = new URL(process.env.MPESA_CALLBACK_URL);
   callbackUrl.searchParams.set('token', process.env.MPESA_CALLBACK_TOKEN);
-  const response = await fetch(`${host}/mpesa/stkpush/v1/processrequest`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${auth.access_token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  let response;
+  let result;
+  try {
+    response = await fetch(`${host}/mpesa/stkpush/v1/processrequest`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${auth.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
       BusinessShortCode: process.env.MPESA_SHORTCODE,
       Password: password,
       Timestamp: timestamp,
-      TransactionType: 'CustomerPayBillOnline',
+      TransactionType: transactionType,
       Amount: Math.ceil(payment.amount),
       PartyA: mpesaPhone(payment.phone),
-      PartyB: process.env.MPESA_SHORTCODE,
+      PartyB: process.env.MPESA_PARTYB || process.env.MPESA_SHORTCODE,
       PhoneNumber: mpesaPhone(payment.phone),
       CallBackURL: callbackUrl.toString(),
       AccountReference: order.id,
       TransactionDesc: 'GDrop delivery',
-    }),
-  });
-  const result = await response.json();
-  if (!response.ok || result.ResponseCode !== '0') {
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    result = await response.json();
+  } catch {
+    throw new HttpError(502, 'Could not send the M-Pesa prompt. Please try again.', 'MPESA_UNAVAILABLE');
+  }
+  if (!response.ok || result.ResponseCode !== '0' || !result.CheckoutRequestID) {
     throw new HttpError(502, result.errorMessage || 'M-Pesa could not start the payment prompt.', 'MPESA_PUSH_FAILED');
   }
   return { mode: 'daraja', status: 'PENDING', checkoutRequestId: result.CheckoutRequestID };
@@ -360,7 +431,7 @@ async function mpesaRequest(order, payment) {
 
 function startPayment(order) {
   const paymentId = id('pay');
-  const payment = { id: paymentId, amount: order.total, phone: order.phone };
+  const payment = { id: paymentId, amount: Math.ceil(order.total), phone: order.phone };
   db.prepare(`
     INSERT INTO payments(id, order_id, amount, phone, status, mode, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'PENDING', 'starting', ?, ?)
@@ -407,13 +478,14 @@ function priceOrder(body) {
     fare += tariff.weightSurcharge[body.weightTier];
   }
   fare = Math.round(fare * 100) / 100;
-  return { serviceType, distance, tip, fare, total: fare + tip, stops, items, goodsEstimate };
+  return { serviceType, distance, tip, fare, total: Math.ceil(fare + tip), stops, items, goodsEstimate };
 }
 
 app.get('/api/config', (_req, res) => {
   res.json({
     tariff,
     maxRadiusKm: MAX_RADIUS_KM,
+    mpesa: { shortcode: process.env.MPESA_SHORTCODE || 'Daraja sandbox' },
     live: {
       onlineCouriers: onlineVerifiedCouriers(),
       openJobs: db.prepare("SELECT count(*) AS count FROM orders WHERE status = 'placed'").get().count,
@@ -421,17 +493,20 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
 app.post('/api/auth/signup', async (req, res, next) => {
   try {
     const body = req.body || {};
     const name = String(body.name || '').trim();
     const email = String(body.email || '').trim().toLowerCase();
-    const phone = String(body.phone || '').trim();
+    const phoneInput = String(body.phone || '').trim();
     const password = String(body.password || '');
     const role = body.role;
     if (name.split(/\s+/).filter(Boolean).length < 2) fail(400, 'Enter your full legal name.', 'INVALID_NAME');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Enter a valid email address.', 'INVALID_EMAIL');
-    if (!/^(?:\+254|254)[17]\d{8}$/.test(phone) && !/^0[17]\d{8}$/.test(phone)) fail(400, 'Enter a valid Kenyan phone number.', 'INVALID_PHONE');
+    if (!/^(?:\+254|254)[17]\d{8}$/.test(phoneInput) && !/^0[17]\d{8}$/.test(phoneInput)) fail(400, 'Enter a valid Kenyan phone number.', 'INVALID_PHONE');
+    const phone = normalizedKenyanPhone(phoneInput);
     if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) fail(400, 'Password must be at least 8 characters and contain letters and numbers.', 'WEAK_PASSWORD');
     if (!body.odpcConsent) fail(400, 'Consent is required to create an account.', 'CONSENT_REQUIRED');
     if (!['customer', 'rider'].includes(role)) fail(400, 'Admins cannot self-register.', 'INVALID_ROLE');
@@ -441,6 +516,11 @@ app.post('/api/auth/signup', async (req, res, next) => {
     }
     const otpId = id('otp');
     const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const smsConfigured = !!process.env.AT_API_KEY && !!process.env.AT_USERNAME;
+    const demoOtpAllowed = process.env.NODE_ENV !== 'production' || process.env.GDROP_DEMO_OTP === 'true';
+    if (!smsConfigured && !demoOtpAllowed) {
+      fail(503, 'Phone verification is unavailable until SMS delivery is configured.', 'SMS_CONFIG_REQUIRED');
+    }
     const payload = {
       id: id('usr'), name, email, phone,
       passwordHash: hashPassword(password), role,
@@ -458,7 +538,7 @@ app.post('/api/auth/signup', async (req, res, next) => {
     res.status(201).json({
       otpId,
       phone,
-      ...(!process.env.AT_API_KEY && !process.env.AT_USERNAME ? { demoCode: code } : {}),
+      ...(!smsConfigured ? { demoCode: code } : {}),
     });
   } catch (error) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return next(new HttpError(409, 'An account with that email already exists.', 'EMAIL_EXISTS'));
@@ -477,10 +557,10 @@ app.post('/api/auth/verify-otp', (req, res, next) => {
     const user = JSON.parse(otp.payload);
     db.prepare(`
       INSERT INTO users(id, name, email, phone, password_hash, role, national_id, plate,
-        license_no, vetting_status, odpc_consent_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        license_no, vetting_status, odpc_consent_at, phone_verified_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(user.id, user.name, user.email, user.phone, user.passwordHash, user.role,
-      user.nationalId, user.plate, user.licenseNo, user.role === 'rider' ? 'PENDING_VETTING' : null, now(), now());
+      user.nationalId, user.plate, user.licenseNo, user.role === 'rider' ? 'PENDING_VETTING' : null, now(), now(), now());
     db.prepare('DELETE FROM otps WHERE id = ?').run(otp.id);
     const result = createSession(db.prepare('SELECT * FROM users WHERE id = ?').get(user.id));
     res.status(201).json(result);
@@ -532,6 +612,7 @@ app.delete('/api/me', requireRole('customer', 'rider'), (req, res) => {
 
 app.post('/api/orders', requireRole('customer'), async (req, res, next) => {
   try {
+    if (!req.user.phone_verified_at) fail(403, 'Verify your phone number before placing an order.', 'PHONE_NOT_VERIFIED');
     const body = req.body || {};
     const priced = priceOrder(body);
     const paymentMethod = body.paymentMethod === 'mpesa_pod' ? 'mpesa_pod' : 'mpesa_prepay';
@@ -611,6 +692,7 @@ app.get('/api/orders/:id', (req, res, next) => {
 
 app.post('/api/orders/:id/pay', requireRole('customer'), async (req, res, next) => {
   try {
+    if (!req.user.phone_verified_at) fail(403, 'Verify your phone number before requesting payment.', 'PHONE_NOT_VERIFIED');
     const order = authorizedOrder(req, req.params.id);
     if (order.status !== 'pending_payment') fail(400, 'This order is not awaiting payment.', 'INVALID_ORDER_STATE');
     const payment = await startPayment({ ...order, phone: req.user.phone });
@@ -871,11 +953,21 @@ app.post('/api/mpesa/callback', (req, res, next) => {
     }
     const success = Number(callback.ResultCode) === 0;
     const metadata = callback.CallbackMetadata?.Item || [];
+    const value = (name) => metadata.find((item) => item.Name === name)?.Value;
     const receipt = metadata.find((item) => item.Name === 'MpesaReceiptNumber')?.Value || null;
+    const callbackAmount = value('Amount');
+    const callbackPhone = value('PhoneNumber');
+    const detailsMatch = success &&
+      Number(callbackAmount) === payment.amount &&
+      mpesaPhone(callbackPhone) === mpesaPhone(payment.phone) &&
+      typeof receipt === 'string' && receipt.length > 0;
+    if (success && !detailsMatch) {
+      console.error(`M-Pesa callback details did not match payment ${payment.id}.`);
+    }
     db.prepare('UPDATE payments SET status = ?, receipt = ?, updated_at = ? WHERE id = ?')
-      .run(success ? 'SUCCESS' : 'FAILED', receipt, now(), payment.id);
+      .run(detailsMatch ? 'SUCCESS' : 'FAILED', detailsMatch ? receipt : null, now(), payment.id);
     db.prepare('UPDATE orders SET payment_status = ?, status = ?, mpesa_receipt = ?, updated_at = ? WHERE id = ?')
-      .run(success ? 'PAID' : 'FAILED', success ? 'placed' : 'pending_payment', receipt, now(), payment.order_id);
+      .run(detailsMatch ? 'PAID' : 'FAILED', detailsMatch ? 'placed' : 'pending_payment', detailsMatch ? receipt : null, now(), payment.order_id);
     emit('orders');
     res.json({ ResultCode: 0, ResultDesc: 'Callback acknowledged' });
   } catch (error) { next(error); }

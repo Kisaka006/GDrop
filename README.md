@@ -5,7 +5,7 @@ GDrop is an on-demand delivery and concierge web app for Homa Bay, Kenya. The
 
 ## Run locally
 
-Requires Node.js 18 or newer.
+Requires Node.js 22 or newer.
 
 ```powershell
 npm install
@@ -15,6 +15,28 @@ npm start
 Open [http://localhost:5000](http://localhost:5000). Set `PORT` to change the
 port, or `GDROP_DB` to choose a different SQLite database file. By default the
 database is created under `data/`.
+
+## Host on Render
+
+GitHub Pages only hosts the static page and cannot run this backend or receive
+Daraja callbacks. To host the full app on Render:
+
+1. Push the repository to GitHub and create a Render **Web Service** from it.
+2. Select the `main` branch, **Node** runtime, build command `npm install`, and
+   start command `npm start`.
+3. Set `NODE_ENV=production` and `GDROP_DB=/var/data/gdrop.db`. Attach a
+   persistent disk mounted at `/var/data`; otherwise SQLite data will be lost
+   when the service is replaced.
+4. Wait for the service to deploy and note its `https://<service>.onrender.com`
+   URL. Use that URL for the Daraja callback:
+   `https://<service>.onrender.com/api/mpesa/callback`.
+5. Add the provider variables below in Render's private **Environment**
+   settings, save, and redeploy. Do not commit credentials or paste them into
+   GitHub.
+
+The public GitHub Pages URL is not the backend or callback URL. The callback
+must reach the deployed Node service over HTTPS. The `/health` endpoint can be
+used as the Render health check path.
 
 Demo accounts are seeded outside production:
 
@@ -46,23 +68,50 @@ never use demo credentials for a live deployment.
 
 ## Optional integrations
 
-Create a `.env` file or set environment variables in the process environment:
+Copy `.env.example` to `.env` for local development, or set these variables in
+your host's environment settings:
 
 ```text
 MPESA_CONSUMER_KEY=
 MPESA_CONSUMER_SECRET=
-MPESA_SHORTCODE=
+MPESA_SHORTCODE=174379
+MPESA_PARTYB=174379
 MPESA_PASSKEY=
 MPESA_CALLBACK_URL=https://your-public-host/api/mpesa/callback
 MPESA_CALLBACK_TOKEN=use-a-long-random-secret
 MPESA_ENV=sandbox
+MPESA_TRANSACTION_TYPE=CustomerBuyGoodsOnline
 AT_API_KEY=
 AT_USERNAME=
 AT_SENDER_ID=
 ```
 
-Use real provider credentials, a long callback token, and an HTTPS callback URL
-for deployment. Without M-Pesa settings, payments are simulated and no money
-moves. Without SMS settings, OTPs are returned to the frontend for local
-testing. Partial provider configuration is reported as an error rather than
-silently switching to demo mode.
+For phone verification, configure Africa's Talking credentials. The account is
+created only after its 6-digit SMS code is verified; orders and M-Pesa payments
+are blocked for unverified phone numbers. In local development, missing SMS
+credentials enable a visible demo code. On production, signup fails closed
+unless SMS is configured; `GDROP_DEMO_OTP=true` is only for explicitly
+authorized testing and must not be used by a public service.
+
+Set `NODE_ENV=production` in the hosting provider's environment settings so
+production safeguards are enabled.
+
+For real M-Pesa payments, configure all Daraja variables with a valid callback
+URL reachable over HTTPS and a long random callback token. The STK prompt is
+sent to the account's verified phone number. Without Daraja settings, local
+payments run in simulation mode and no money moves. Partial provider
+configuration is reported as an error instead of silently switching to demo
+mode.
+
+Create a Daraja app in the Safaricom Daraja developer portal and start with
+sandbox credentials and the sandbox test shortcode/passkey. Set
+`MPESA_TRANSACTION_TYPE=CustomerBuyGoodsOnline` for the confirmed sandbox
+Buy Goods/Till setup, or `CustomerPayBillOnline` for a PayBill shortcode. Set
+`MPESA_PARTYB` to the PayBill shortcode or Buy Goods Till number (it defaults
+to `MPESA_SHORTCODE` when they are the same). Set
+`MPESA_CALLBACK_URL` to this deployed app's HTTPS `/api/mpesa/callback` URL and
+generate a long random `MPESA_CALLBACK_TOKEN`. Test successful, cancelled, and
+timed-out STK prompts in sandbox before switching `MPESA_ENV` to `production`
+and replacing all sandbox values with credentials issued for the live
+Safaricom shortcode. Never put Daraja secrets in frontend code or commit them
+to GitHub.
