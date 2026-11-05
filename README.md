@@ -1,7 +1,7 @@
 # GDrop
 
 GDrop is an on-demand delivery and concierge web app for Homa Bay, Kenya. The
-`GDrop.html` interface is served by an Express API backed by SQLite.
+`index.html` interface is served by an Express API backed by SQLite.
 
 ## Run locally
 

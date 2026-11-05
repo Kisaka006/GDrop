@@ -881,8 +881,8 @@ app.post('/api/mpesa/callback', (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'GDrop.html')));
-app.get('/GDrop.html', (_req, res) => res.sendFile(path.join(__dirname, 'GDrop.html')));
+app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/GDrop.html', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.use((req, _res, next) => next(new HttpError(404, 'Not found.', 'NOT_FOUND')));
 app.use((error, _req, res, _next) => {
   const status = error instanceof HttpError ? error.status : 500;
