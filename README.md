@@ -41,21 +41,20 @@ used as the Render health check path.
 ## Production account setup
 
 Demo accounts are deliberately disabled on the public production service. To
-create the first production admin without shared demo credentials:
+create the first production admin without phone verification:
 
-1. Configure Africa's Talking SMS variables in Render and redeploy.
-2. Register a customer from the live site and complete the SMS phone
-   verification.
-3. Open the Render Shell for the production service. Run
-   `GDROP_ADMIN_EMAIL=your-signup-email@example.com npm run admin:promote`.
-   The command uses the service's configured `GDROP_DB`, verifies the account
-   is a consented, phone-verified customer, and promotes it once. It does not
-   print or change the account password.
-4. Sign in with that email and the password chosen at signup. Create other
-   users through the verified signup flow.
+1. Open the Render Shell for the production service and run
+   `npm run admin:create`.
+2. Enter the admin email, display name, and a new password when prompted. The
+   password input is hidden, the command confirms it, and only its scrypt hash
+   is stored in the production database. Use at least 14 characters with
+   letters and numbers, and save it in your password manager.
+3. Sign in with that email and password. This one-time setup refuses to create
+   a second admin; ordinary public signups still require SMS phone verification.
 
-Run the promotion command only in the production service's shell. Do not set
-`GDROP_SEED_DEMO=true` on the public production service.
+Run the command only in the production service's shell. Do not set
+`GDROP_SEED_DEMO=true` or `GDROP_DEMO_OTP=true` on the public production
+service.
 
 ## Protected demo staging
 

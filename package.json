@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "admin:create": "node scripts/create-admin.js",
     "admin:promote": "node scripts/promote-admin.js"
   },
   "engines": {
