@@ -41,20 +41,27 @@ used as the Render health check path.
 ## Production account setup
 
 Demo accounts are deliberately disabled on the public production service. To
-create the first production admin without phone verification:
+create the first production admin without Render Shell access:
 
-1. Open the Render Shell for the production service and run
-   `npm run admin:create`.
-2. Enter the admin email, display name, and a new password when prompted. The
-   password input is hidden, the command confirms it, and only its scrypt hash
-   is stored in the production database. Use at least 14 characters with
-   letters and numbers, and save it in your password manager.
-3. Sign in with that email and password. This one-time setup refuses to create
-   a second admin; ordinary public signups still require SMS phone verification.
+1. Generate a long random setup key (at least 32 characters) using a password
+   manager. Add it as `GDROP_ADMIN_SETUP_TOKEN` in Render's private environment
+   settings and deploy.
+2. Visit `https://<your-service>.onrender.com/admin/setup`. Enter the setup
+   key, your admin email and name, and a unique password of at least 14
+   characters. The password is sent only over HTTPS and stored as a scrypt
+   hash.
+3. Sign in at the site with the admin email and password. Initial setup closes
+   as soon as the first admin is created.
+4. Remove `GDROP_ADMIN_SETUP_TOKEN` from Render only after confirming the
+   database is on persistent storage. Do not set `GDROP_SEED_DEMO=true` or
+   `GDROP_DEMO_OTP=true` on the public production service.
 
-Run the command only in the production service's shell. Do not set
-`GDROP_SEED_DEMO=true` or `GDROP_DEMO_OTP=true` on the public production
-service.
+The admin password cannot be recovered by the app; save it in a password
+manager. Render's free web-service filesystem is ephemeral. If the SQLite
+database is stored there, a later deploy or restart can erase accounts and
+orders. Use persistent storage or a durable hosted database before treating
+this as a permanent production service. Do not remove the bootstrap setting
+until the database persists across deploys.
 
 ## Protected demo staging
 

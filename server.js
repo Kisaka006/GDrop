@@ -78,6 +78,7 @@ const SESSION_IDLE_MS = 20 * 60 * 1000;
 const OTP_LIFETIME_MS = 10 * 60 * 1000;
 const events = new Map();
 const attempts = new Map();
+const adminSetupAttempts = new Map();
 
 app.disable('x-powered-by');
 if (process.env.NODE_ENV === 'staging' && (!process.env.GDROP_STAGING_USERNAME || !process.env.GDROP_STAGING_PASSWORD)) {
@@ -539,6 +540,79 @@ app.get('/api/config', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+function initialAdminSetupEnabled() {
+  return process.env.NODE_ENV === 'production' &&
+    typeof process.env.GDROP_ADMIN_SETUP_TOKEN === 'string' &&
+    Buffer.byteLength(process.env.GDROP_ADMIN_SETUP_TOKEN) >= 32;
+}
+
+function initialAdminExists() {
+  return !!db.prepare("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").get();
+}
+
+app.get('/admin/setup', (_req, res) => {
+  if (!initialAdminSetupEnabled() || initialAdminExists()) {
+    return res.status(404).send('Not found.');
+  }
+  res.set({
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  });
+  res.sendFile(path.join(__dirname, 'admin-setup.html'));
+});
+
+app.post('/admin/setup', (req, res, next) => {
+  try {
+    if (!initialAdminSetupEnabled()) fail(404, 'Not found.', 'NOT_FOUND');
+    const key = req.ip;
+    const attempt = adminSetupAttempts.get(key) || { count: 0, resetAt: now() + 15 * 60 * 1000 };
+    if (attempt.resetAt <= now()) {
+      attempt.count = 0;
+      attempt.resetAt = now() + 15 * 60 * 1000;
+    }
+    if (attempt.count >= 10) fail(429, 'Too many setup attempts. Try again in 15 minutes.', 'RATE_LIMITED');
+    attempt.count += 1;
+    adminSetupAttempts.set(key, attempt);
+
+    const expectedToken = process.env.GDROP_ADMIN_SETUP_TOKEN;
+    const providedToken = String(req.get('x-admin-setup-token') || '');
+    const expectedBuffer = Buffer.from(expectedToken);
+    const providedBuffer = Buffer.from(providedToken);
+    if (expectedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+      fail(403, 'The setup key is invalid.', 'INVALID_SETUP_KEY');
+    }
+
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (name.split(/\s+/).filter(Boolean).length < 2) fail(400, 'Enter your full name.', 'INVALID_NAME');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Enter a valid email address.', 'INVALID_EMAIL');
+    if (password.length < 14 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      fail(400, 'Use a unique password with at least 14 characters, including letters and numbers.', 'WEAK_PASSWORD');
+    }
+
+    const createAdmin = db.transaction(() => {
+      if (initialAdminExists()) fail(409, 'An admin already exists; initial setup is closed.', 'ADMIN_ALREADY_EXISTS');
+      if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) {
+        fail(409, 'That email is already in use.', 'EMAIL_EXISTS');
+      }
+      const timestamp = now();
+      db.prepare(`
+        INSERT INTO users(id, name, email, phone, password_hash, role, odpc_consent_at,
+          phone_verified_at, created_at)
+        VALUES (?, ?, ?, '', ?, 'admin', ?, NULL, ?)
+      `).run(id('usr'), name, email, hashPassword(password), timestamp, timestamp);
+    });
+    createAdmin();
+    adminSetupAttempts.delete(key);
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.post('/api/auth/signup', async (req, res, next) => {
   try {
