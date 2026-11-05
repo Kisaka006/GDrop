@@ -38,6 +38,44 @@ The public GitHub Pages URL is not the backend or callback URL. The callback
 must reach the deployed Node service over HTTPS. The `/health` endpoint can be
 used as the Render health check path.
 
+## Production account setup
+
+Demo accounts are deliberately disabled on the public production service. To
+create the first production admin without shared demo credentials:
+
+1. Configure Africa's Talking SMS variables in Render and redeploy.
+2. Register a customer from the live site and complete the SMS phone
+   verification.
+3. Open the Render Shell for the production service. Run
+   `GDROP_ADMIN_EMAIL=your-signup-email@example.com npm run admin:promote`.
+   The command uses the service's configured `GDROP_DB`, verifies the account
+   is a consented, phone-verified customer, and promotes it once. It does not
+   print or change the account password.
+4. Sign in with that email and the password chosen at signup. Create other
+   users through the verified signup flow.
+
+Run the promotion command only in the production service's shell. Do not set
+`GDROP_SEED_DEMO=true` on the public production service.
+
+## Protected demo staging
+
+For demos, create a second Render Web Service from the same GitHub repository
+and branch. Configure its own persistent disk and a separate `GDROP_DB`, then
+set these variables on the staging service only:
+
+```text
+NODE_ENV=staging
+GDROP_SEED_DEMO=true
+GDROP_DB=/var/data/gdrop-staging.db
+GDROP_STAGING_USERNAME=your-private-staging-username
+GDROP_STAGING_PASSWORD=a-long-unique-random-password
+```
+
+Do not add Daraja or SMS credentials to the demo staging service: it uses
+simulated payments and demo OTPs. The app requires HTTP Basic authentication
+for every staging page and API request, so share both the staging URL and its
+access credentials only with trusted testers.
+
 Demo accounts are seeded outside production:
 
 | Role | Email | Password |

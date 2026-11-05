@@ -80,6 +80,34 @@ const events = new Map();
 const attempts = new Map();
 
 app.disable('x-powered-by');
+if (process.env.NODE_ENV === 'staging' && (!process.env.GDROP_STAGING_USERNAME || !process.env.GDROP_STAGING_PASSWORD)) {
+  throw new Error('Protected staging requires GDROP_STAGING_USERNAME and GDROP_STAGING_PASSWORD.');
+}
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV !== 'staging') return next();
+  const authorization = req.get('authorization') || '';
+  const encoded = authorization.startsWith('Basic ') ? authorization.slice(6) : '';
+  let credentials = '';
+  try {
+    credentials = Buffer.from(encoded, 'base64').toString('utf8');
+  } catch {
+    credentials = '';
+  }
+  const separator = credentials.indexOf(':');
+  const username = separator >= 0 ? credentials.slice(0, separator) : '';
+  const password = separator >= 0 ? credentials.slice(separator + 1) : '';
+  const equalSecret = (candidate, expected) => {
+    const candidateBuffer = Buffer.from(candidate);
+    const expectedBuffer = Buffer.from(expected);
+    return candidateBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(candidateBuffer, expectedBuffer);
+  };
+  if (!equalSecret(username, process.env.GDROP_STAGING_USERNAME) ||
+      !equalSecret(password, process.env.GDROP_STAGING_PASSWORD)) {
+    res.set('WWW-Authenticate', 'Basic realm="GDrop private staging"');
+    return res.status(401).send('Staging access requires authorization.');
+  }
+  next();
+});
 app.use(express.json({ limit: '2mb' }));
 
 class HttpError extends Error {
