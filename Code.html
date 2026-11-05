@@ -1,0 +1,2535 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GDrop — Homa Bay Delivery & Concierge Platform</title>
+
+  <!-- Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['"Space Grotesk"', 'sans-serif']
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b'
+            },
+            mpesa: {
+              DEFAULT: '#00a859',
+              dark: '#008a49',
+              light: '#e6f7ef'
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Greystyled pseudo-text placeholders across all inputs */
+    input::placeholder,
+    textarea::placeholder {
+      color: #94a3b8 !important; /* Neutral muted slate grey */
+      opacity: 1 !important;
+      font-style: italic !important;
+      font-weight: 400 !important;
+    }
+
+    /* Active styling dynamically applied when location access is granted */
+    .auto-located {
+      color: #0f172a !important;            /* High-contrast slate-900 */
+      background-color: #f0fdf4 !important; /* Gentle emerald tint */
+      border-color: #10b981 !important;     /* Bright emerald boundary */
+      box-shadow: 0 0 0 1px #10b981 !important;
+      font-weight: 600 !important;
+      font-style: normal !important;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f8fafc; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    .map-container {
+      height: 380px;
+      width: 100%;
+      border-radius: 1.25rem;
+      z-index: 10;
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .pulse-driver {
+      animation: pulse-ring 2.2s infinite cubic-bezier(0.45, 0, 0.55, 1);
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans text-slate-800 antialiased selection:bg-brand-500 selection:text-white bg-slate-50">
+
+  <header class="bg-white/95 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Logo -->
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="app.setPortalView('customer')">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-700 to-brand-500 flex items-center justify-center text-white shadow-md shadow-brand-500/25">
+          <i class="fa-solid fa-location-arrow text-base"></i>
+        </div>
+        <div>
+          <span class="font-display font-bold text-xl text-slate-900 tracking-tight">G<span class="text-brand-600">Drop</span></span>
+          <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-brand-700 ml-1.5 border border-brand-200">Homa Bay Hub</span>
+        </div>
+      </div>
+
+      <!-- Portal Switcher -->
+      <div class="flex items-center bg-slate-100 p-1 rounded-2xl text-xs font-semibold text-slate-600">
+        <button id="nav-btn-customer" onclick="app.setPortalView('customer')" class="portal-tab px-3.5 py-1.5 rounded-xl bg-white text-slate-900 shadow-sm transition">
+          <i class="fa-solid fa-bag-shopping mr-1.5 text-brand-600"></i>Customer
+        </button>
+        <button id="nav-btn-rider" onclick="app.setPortalView('rider')" class="portal-tab px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 transition">
+          <i class="fa-solid fa-motorcycle mr-1.5 text-amber-500"></i>Courier Radar
+        </button>
+        <button id="nav-btn-admin" onclick="app.setPortalView('admin')" class="portal-tab px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 transition">
+          <i class="fa-solid fa-shield-halved mr-1.5 text-indigo-600"></i>Admin Hub
+        </button>
+      </div>
+
+      <!-- User Profile & Action Bar -->
+      <div class="flex items-center space-x-3">
+        <div id="auth-signed-in" class="flex items-center space-x-2 sm:space-x-3">
+          <div class="hidden sm:flex flex-col text-right">
+            <span id="user-display-name" class="text-xs font-bold text-slate-900">Otieno George</span>
+            <span id="user-order-tier" class="text-[10px] text-brand-700 font-semibold bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">3 Orders Verified</span>
+          </div>
+          <button onclick="app.openAccountModal()" title="Manage Profile & Right to Erasure" class="w-9 h-9 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-slate-200 transition">
+            <i class="fa-solid fa-user-gear text-xs"></i>
+          </button>
+          <button onclick="app.logoutUser()" title="Sign Out" class="px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> <span class="hidden md:inline">Sign Out</span>
+          </button>
+        </div>
+
+        <div id="auth-signed-out" class="hidden items-center space-x-2">
+          <button onclick="app.openAuthModal('login')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 transition">
+            Sign In
+          </button>
+          <button onclick="app.openAuthModal('signup')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition">
+            Register
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Location Access Request Banner & Operational Radius Status -->
+  <div id="location-banner" class="bg-gradient-to-r from-brand-950 via-slate-900 to-brand-900 text-white border-b border-brand-800 px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-brand-400 animate-ping"></span>
+        <span><strong class="font-bold text-brand-300">GDrop Geofence:</strong> Anchored at <strong>Homa Bay Posta Hub</strong>. Operational radius <strong>40.0 km</strong>.</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="app.requestBrowserLocation()" class="px-3 py-1 rounded-xl bg-brand-500 hover:bg-brand-400 text-slate-950 font-bold transition flex items-center gap-1.5">
+          <i class="fa-solid fa-crosshairs text-xs"></i> <span id="loc-btn-text">Detect GPS Location</span>
+        </button>
+        <span id="loc-status-pill" class="text-[10px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold border border-slate-700">Awaiting GPS Access</span>
+      </div>
+    </div>
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- Global Toast Notifications -->
+    <div id="global-toast" class="hidden fixed bottom-6 right-6 z-50 max-w-md w-full bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700 transition transform duration-300 flex items-start space-x-3">
+      <div id="toast-icon" class="text-brand-400 text-xl mt-0.5"><i class="fa-solid fa-bell"></i></div>
+      <div class="flex-1">
+        <h4 id="toast-title" class="font-bold text-sm leading-tight text-white">System Notification</h4>
+        <p id="toast-message" class="text-xs text-slate-300 mt-1 leading-snug"></p>
+      </div>
+      <button onclick="app.dismissToast()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div id="portal-customer" class="portal-container space-y-8">
+      
+      <!-- Hero Banner -->
+      <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+        <div class="relative z-10 max-w-2xl">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30 mb-3">
+            <i class="fa-solid fa-shield-halved"></i> Proof of Delivery Protected • 40km Geofence
+          </div>
+          <h1 class="text-2xl sm:text-3xl font-display font-bold tracking-tight">Express Package Dispatch & Concierge Shopping</h1>
+          <p class="mt-2 text-sm text-slate-300 leading-relaxed">
+            Reliable on-demand logistics across Homa Bay Town, Rodi Kopany, Kendu Bay, Mbita Junction, and Ndhiwa. Every order is secured with a 4-digit handover PIN and digital till receipts.
+          </p>
+          <div class="mt-4 flex flex-wrap gap-4 text-xs font-medium text-slate-300">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-brand-400"></i> Flag-fall KES 150 + KES 35/km</span>
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-basket-shopping text-amber-400"></i> Shopping Commission 8%</span>
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-key text-indigo-400"></i> 4-Digit Handover PIN Protected</span>
+          </div>
+        </div>
+        <div class="absolute right-0 bottom-0 opacity-10 sm:opacity-20 pointer-events-none transform translate-x-10 translate-y-10">
+          <i class="fa-solid fa-truck-fast text-[220px]"></i>
+        </div>
+      </div>
+
+      <!-- Layout Grid: Order Booking & Map Tracking -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        <!-- Left Column: Booking Form -->
+        <div class="lg:col-span-7 space-y-6">
+          <div class="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm">
+            
+            <!-- Service Selector Tabs -->
+            <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl mb-6 text-sm font-semibold">
+              <button id="tab-service-courier" onclick="app.setServiceType('courier')" class="py-2.5 rounded-xl bg-white text-slate-900 shadow-sm transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-box text-brand-600"></i> Courier & Packages
+              </button>
+              <button id="tab-service-shopping" onclick="app.setServiceType('shopping')" class="py-2.5 rounded-xl text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-basket-shopping text-brand-600"></i> Shopping Concierge
+              </button>
+            </div>
+
+            <!-- SECTION A: COURIER (SEND OR RECEIVE) -->
+            <div id="section-courier-form" class="space-y-5">
+              
+              <!-- Directionality Switcher -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Service Modality</label>
+                <div class="grid grid-cols-2 gap-3 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                  <button type="button" id="direction-btn-send" onclick="app.setCourierDirection('send')" class="py-2 px-3 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i> Send a Package
+                  </button>
+                  <button type="button" id="direction-btn-receive" onclick="app.setCourierDirection('receive')" class="py-2 px-3 rounded-xl text-slate-600 font-bold text-xs hover:text-slate-900 transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-inbox"></i> Receive a Package
+                  </button>
+                </div>
+                <div id="direction-explainer" class="mt-2 text-[11px] text-slate-500 font-medium px-1">
+                  You are sending a package from your location to a recipient in Homa Bay County.
+                </div>
+              </div>
+
+              <!-- Pickup & Dropoff Inputs with default empty values so grey pseudo-text displays -->
+              <div class="space-y-4 pt-1">
+                <div>
+                  <div class="flex justify-between items-center mb-1.5">
+                    <label id="courier-origin-label" class="text-xs font-bold uppercase tracking-wider text-slate-600">
+                      <i class="fa-solid fa-circle-dot text-brand-600 mr-1"></i> Origin / Pickup Location
+                    </label>
+                    <button type="button" onclick="app.fillOriginWithCurrentLocation()" class="text-[10px] font-bold text-brand-600 hover:underline">
+                      <i class="fa-solid fa-location-crosshairs mr-1"></i> Use My GPS
+                    </button>
+                  </div>
+                  <div class="relative">
+                    <input type="text" id="courier-origin" value="" placeholder="e.g. Homa Bay Posta Hub, CBD, or market stall" class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+                    <i class="fa-solid fa-location-arrow absolute left-3.5 top-3.5 text-slate-400 text-xs"></i>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex justify-between items-center mb-1.5">
+                    <label id="courier-dest-label" class="text-xs font-bold uppercase tracking-wider text-slate-600">
+                      <i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Destination / Delivery Point
+                    </label>
+                    <button type="button" onclick="app.fillDestWithCurrentLocation()" class="text-[10px] font-bold text-brand-600 hover:underline">
+                      <i class="fa-solid fa-location-crosshairs mr-1"></i> Deliver To Me
+                    </button>
+                  </div>
+                  <div class="relative">
+                    <input type="text" id="courier-destination" value="" placeholder="e.g. Rodi Kopany Center, Junction Rd, or Kendu Bay" class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+                    <i class="fa-solid fa-flag-checkered absolute left-3.5 top-3.5 text-slate-400 text-xs"></i>
+                  </div>
+                </div>
+
+                <!-- Quick Location Buttons -->
+                <div class="flex flex-wrap gap-1.5 text-[11px] items-center pt-1">
+                  <span class="text-slate-400 text-[10px] font-bold uppercase">Quick Hubs:</span>
+                  <button type="button" onclick="app.selectPresetLocation('Sofia Estate, Homa Bay')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Sofia</button>
+                  <button type="button" onclick="app.selectPresetLocation('Shauri Yako, Homa Bay')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Shauri Yako</button>
+                  <button type="button" onclick="app.selectPresetLocation('Arujo Area, Kendu Rd')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Arujo</button>
+                  <button type="button" onclick="app.selectPresetLocation('Rodi Kopany Hub (12km)')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Rodi Kopany</button>
+                  <button type="button" onclick="app.selectPresetLocation('Kendu Bay Pier (34km)')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Kendu Bay</button>
+                  <button type="button" onclick="app.selectPresetLocation('Mbita Junction (38km)')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Mbita Junction</button>
+                </div>
+              </div>
+
+              <!-- Recipient Particulars -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label id="courier-contact-name-label" class="block text-xs font-semibold text-slate-600 mb-1">Recipient Legal Name (Min 2 Names)</label>
+                  <input type="text" id="courier-recipient-name" value="" placeholder="e.g. Mercy Achieng" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+                </div>
+                <div>
+                  <label id="courier-contact-phone-label" class="block text-xs font-semibold text-slate-600 mb-1">Recipient Phone (+254)</label>
+                  <input type="tel" id="courier-recipient-phone" value="" placeholder="e.g. 0722123456 or +254722123456" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+                </div>
+              </div>
+
+              <!-- Weight Tiers -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Estimated Package Weight Tier</label>
+                <div class="grid grid-cols-3 gap-3">
+                  <label class="cursor-pointer">
+                    <input type="radio" name="weight-tier" value="light" checked class="peer sr-only" onchange="app.updateFareQuote()">
+                    <div class="p-3 text-center rounded-xl border border-slate-200 bg-slate-50 peer-checked:border-brand-600 peer-checked:bg-brand-50/50 peer-checked:text-brand-900 transition">
+                      <i class="fa-solid fa-envelope block text-sm text-brand-600 mb-1"></i>
+                      <div class="text-xs font-bold">Light</div>
+                      <div class="text-[10px] text-slate-500">&lt; 2 kg</div>
+                    </div>
+                  </label>
+                  <label class="cursor-pointer">
+                    <input type="radio" name="weight-tier" value="medium" class="peer sr-only" onchange="app.updateFareQuote()">
+                    <div class="p-3 text-center rounded-xl border border-slate-200 bg-slate-50 peer-checked:border-brand-600 peer-checked:bg-brand-50/50 peer-checked:text-brand-900 transition">
+                      <i class="fa-solid fa-box block text-sm text-brand-600 mb-1"></i>
+                      <div class="text-xs font-bold">Medium</div>
+                      <div class="text-[10px] text-slate-500">2 — 10 kg (+KES 60)</div>
+                    </div>
+                  </label>
+                  <label class="cursor-pointer">
+                    <input type="radio" name="weight-tier" value="heavy" class="peer sr-only" onchange="app.updateFareQuote()">
+                    <div class="p-3 text-center rounded-xl border border-slate-200 bg-slate-50 peer-checked:border-brand-600 peer-checked:bg-brand-50/50 peer-checked:text-brand-900 transition">
+                      <i class="fa-solid fa-dolly block text-sm text-brand-600 mb-1"></i>
+                      <div class="text-xs font-bold">Bulky</div>
+                      <div class="text-[10px] text-slate-500">&gt; 10 kg (+KES 140)</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Scheduled Delivery Checkbox -->
+              <div class="border-t border-slate-100 pt-4">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-semibold text-slate-700">Schedule delivery for a specific timeslot</span>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="schedule-toggle" class="sr-only peer" onchange="app.toggleScheduleField()">
+                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
+                  </label>
+                </div>
+                <div id="schedule-inputs" class="hidden grid grid-cols-2 gap-3 mt-2">
+                  <input type="date" id="schedule-date" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium">
+                  <input type="time" id="schedule-time" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium">
+                </div>
+              </div>
+
+            </div>
+
+            <!-- SECTION B: SHOPPING & MULTI-STOP ERRANDS -->
+            <div id="section-shopping-form" class="hidden space-y-5">
+              
+              <div class="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 text-xs text-amber-900 flex items-start gap-3">
+                <i class="fa-solid fa-basket-shopping text-amber-600 text-sm mt-0.5"></i>
+                <div class="leading-relaxed">
+                  <strong>Personal Shopping Concierge:</strong> Provide an item checklist and budget. Your GDrop runner visits Homa Bay shops, negotiates prices, uploads the official paper till slip with camera proof, and requires your 4-digit PIN upon drop-off.
+                </div>
+              </div>
+
+              <!-- Multi-Stop Configuration -->
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs font-bold uppercase tracking-wider text-slate-600">Merchant Stops (Homa Bay 40km Radius)</label>
+                  <button type="button" onclick="app.addShoppingStop()" class="text-xs font-bold text-brand-600 hover:text-brand-700">
+                    <i class="fa-solid fa-plus-circle mr-1"></i> Add Stop (+KES 120)
+                  </button>
+                </div>
+                
+                <div id="shopping-stops-list" class="space-y-2">
+                  <div class="flex items-center gap-2 stop-item">
+                    <span class="w-6 h-6 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">1</span>
+                    <input type="text" value="" placeholder="e.g. Shivling Supermarket or Homa Bay Fish Market" class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-bold uppercase tracking-wider text-slate-600">Deliver Items To:</label>
+                    <button type="button" onclick="app.fillShoppingDropWithCurrentLocation()" class="text-[10px] font-bold text-brand-600 hover:underline">
+                      <i class="fa-solid fa-location-crosshairs mr-1"></i> Deliver To My Location
+                    </button>
+                  </div>
+                  <input type="text" id="shopping-dropoff" value="" placeholder="e.g. Shauri Yako Estate, near Catholic Church" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+                </div>
+              </div>
+
+              <!-- Itemized Checklist -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-bold uppercase tracking-wider text-slate-600">Item Checklist & Budget</span>
+                  <button type="button" onclick="app.addShoppingItemRow()" class="text-xs font-bold text-brand-600 hover:text-brand-700">
+                    <i class="fa-solid fa-cart-plus mr-1"></i> Add Item
+                  </button>
+                </div>
+
+                <div id="shopping-items-container" class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                  <div class="flex items-center gap-2 item-row bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <input type="text" placeholder="e.g. Fresh Tilapia Fish (Medium)" value="" class="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+                    <input type="number" placeholder="Qty" value="" min="1" class="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-center" oninput="app.calculateShoppingSubtotal()">
+                    <div class="relative w-28">
+                      <span class="absolute left-2 top-2 text-[10px] text-slate-400 font-bold">KES</span>
+                      <input type="number" placeholder="Est. Price" value="" min="0" class="w-full pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-right item-budget" oninput="app.calculateShoppingSubtotal()">
+                    </div>
+                    <button onclick="app.removeShoppingItemRow(this)" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                  </div>
+                  <div class="flex items-center gap-2 item-row bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <input type="text" placeholder="e.g. Unga ya Ugali 2kg packet" value="" class="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+                    <input type="number" placeholder="Qty" value="" min="1" class="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-center" oninput="app.calculateShoppingSubtotal()">
+                    <div class="relative w-28">
+                      <span class="absolute left-2 top-2 text-[10px] text-slate-400 font-bold">KES</span>
+                      <input type="number" placeholder="Est. Price" value="" min="0" class="w-full pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-right item-budget" oninput="app.calculateShoppingSubtotal()">
+                    </div>
+                    <button onclick="app.removeShoppingItemRow(this)" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                  </div>
+                </div>
+
+                <div class="mt-3 flex justify-between items-center text-xs font-semibold px-3 py-2 bg-slate-100 rounded-xl">
+                  <span class="text-slate-600">Estimated Shopping Goods Total:</span>
+                  <span id="shopping-goods-sum" class="font-bold text-slate-900 text-sm">KES 0.00</span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- TARIFF & DISPATCH ACTION -->
+            <div class="mt-6 pt-6 border-t border-slate-200 space-y-4">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Live Itemised Quotation</h4>
+              
+              <div class="space-y-2 text-xs">
+                <div class="flex justify-between text-slate-600">
+                  <span>Base Flag-fall Fare</span>
+                  <span class="font-medium text-slate-900">KES 150.00</span>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span id="fare-dist-label">Distance Tariff (est. 11.8 km @ KES 35/km)</span>
+                  <span id="fare-dist-cost" class="font-medium text-slate-900">KES 413.00</span>
+                </div>
+                <div id="row-surcharges" class="flex justify-between text-slate-600 hidden">
+                  <span id="label-surcharges">Weight & Multi-stop Surcharges</span>
+                  <span id="cost-surcharges" class="font-medium text-slate-900">KES 0.00</span>
+                </div>
+                <div id="row-shopping-commission" class="flex justify-between text-slate-600 hidden">
+                  <span>GDrop Shopping Commission (8%)</span>
+                  <span id="cost-shopping-commission" class="font-medium text-slate-900">KES 0.00</span>
+                </div>
+                
+                <!-- Driver Gratuity / Tip -->
+                <div class="flex justify-between items-center pt-2">
+                  <span class="text-slate-600">Rider Gratuity / Tip</span>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="app.setTip(0)" class="tip-btn px-2.5 py-1 rounded-lg text-[10px] font-bold border border-brand-600 bg-brand-600 text-white">None</button>
+                    <button type="button" onclick="app.setTip(50)" class="tip-btn px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 bg-white">KES 50</button>
+                    <button type="button" onclick="app.setTip(100)" class="tip-btn px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 bg-white">KES 100</button>
+                    <button type="button" onclick="app.setTip(200)" class="tip-btn px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 bg-white">KES 200</button>
+                  </div>
+                </div>
+
+                <!-- Terms Notice -->
+                <div class="p-3 bg-slate-50 rounded-2xl text-[11px] text-slate-500 space-y-1">
+                  <div class="flex items-center justify-between text-slate-700 font-medium">
+                    <span><i class="fa-solid fa-scale-balanced mr-1 text-slate-400"></i> Platform Minimum Fare:</span>
+                    <span>KES 250.00</span>
+                  </div>
+                  <div><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1"></i> Cancellation Fee: KES 100 applied once courier accepts task.</div>
+                  <div class="text-emerald-700 font-medium"><i class="fa-solid fa-shield-halved mr-1"></i> Proof of Delivery: 4-digit code required to finalize.</div>
+                </div>
+
+                <!-- Total Amount -->
+                <div class="pt-3 border-t border-slate-200 flex justify-between items-center">
+                  <div>
+                    <span class="text-xs text-slate-500 block">Total Due</span>
+                    <span id="grand-total-display" class="text-2xl font-black text-slate-900 font-display">KES 563.00</span>
+                  </div>
+                  <div id="payment-eligibility-tag" class="text-right"></div>
+                </div>
+              </div>
+
+              <!-- Payment Method Selection -->
+              <div class="pt-3">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Payment Method</label>
+                <div class="space-y-2">
+                  <label class="flex items-center justify-between p-3.5 border-2 border-mpesa rounded-2xl bg-mpesa-light/30 cursor-pointer">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-xl bg-mpesa text-white flex items-center justify-center font-bold text-xs">M</div>
+                      <div>
+                        <div class="text-xs font-bold text-slate-900">M-Pesa STK Push Instant Pre-Payment</div>
+                        <div class="text-[10px] text-slate-500">Safaricom PIN prompt sent to your verified +254 phone</div>
+                      </div>
+                    </div>
+                    <input type="radio" name="payment-method" value="mpesa_prepay" checked class="text-mpesa focus:ring-mpesa">
+                  </label>
+
+                  <!-- Pay on Delivery -->
+                  <div id="pod-wrapper">
+                    <label id="pod-label" class="flex items-center justify-between p-3.5 border border-slate-200 rounded-2xl bg-white cursor-pointer transition">
+                      <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-xs"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                        <div>
+                          <div class="text-xs font-bold text-slate-800" id="pod-title">Pay On Delivery (M-Pesa Business Till)</div>
+                          <div class="text-[10px] text-slate-500" id="pod-desc">Unlocked for verified frequent clients after 3 completed deliveries.</div>
+                        </div>
+                      </div>
+                      <input type="radio" id="radio-pod" name="payment-method" value="mpesa_pod" disabled class="text-brand-600 focus:ring-brand-500">
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Submit Button -->
+              <button type="button" onclick="app.handleOrderSubmission()" class="w-full py-4 px-6 rounded-2xl font-bold text-white bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 shadow-xl shadow-brand-500/20 active:scale-[0.99] transition flex items-center justify-center gap-2 text-sm sm:text-base">
+                <i class="fa-solid fa-paper-plane"></i> Confirm & Dispatch GDrop Courier
+              </button>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Map & Live Order Tracker -->
+        <div class="lg:col-span-5 space-y-6">
+          
+          <!-- Map Card -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                <h3 class="font-bold text-sm text-slate-900">Live Spatial Route & 40km Radar</h3>
+              </div>
+              <span id="route-distance-badge" class="px-2.5 py-1 bg-slate-100 rounded-full text-[11px] font-extrabold text-slate-700">
+                11.8 km (Est. 24 mins)
+              </span>
+            </div>
+
+            <!-- Leaflet Container -->
+            <div id="map" class="map-container shadow-inner border border-slate-100"></div>
+
+            <div class="flex items-center justify-between text-[11px] text-slate-500 px-1">
+              <span><i class="fa-solid fa-motorcycle text-brand-600 mr-1"></i> Active couriers nearby: <strong id="map-riders-online-txt">3 riders online</strong></span>
+              <button onclick="app.recenterMap()" class="hover:text-brand-600 font-semibold underline">Recenter Homa Bay</button>
+            </div>
+          </div>
+
+          <!-- Active Tracker Card (With Handover PIN Display) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm space-y-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-slate-400">GDrop Real-Time Dispatch</span>
+                <h3 id="tracker-order-id" class="font-display font-bold text-slate-900 text-sm">#GDROP-5041</h3>
+              </div>
+              <span id="tracker-status-pill" class="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                Courier Assigned
+              </span>
+            </div>
+
+            <!-- PROOF OF DELIVERY (POD) PIN BOX -->
+            <div class="bg-gradient-to-r from-brand-900 to-slate-900 text-white rounded-2xl p-4 shadow-md flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-brand-300 block">Proof of Delivery (POD)</span>
+                <p class="text-xs text-slate-300">Give this code to rider upon Package arrival:</p>
+              </div>
+              <div class="text-right">
+                <span id="tracker-pod-code" class="text-2xl font-mono font-black tracking-widest text-emerald-400 bg-slate-800/80 px-3 py-1 rounded-xl border border-brand-500/30">8492</span>
+              </div>
+            </div>
+
+            <!-- Progress 5-step Stepper -->
+            <div class="relative py-2">
+              <div class="overflow-hidden h-1.5 mb-4 text-xs flex rounded-full bg-slate-100">
+                <div id="tracker-progress-bar" style="width: 40%" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-brand-500 transition-all duration-700"></div>
+              </div>
+
+              <div class="grid grid-cols-5 text-[10px] font-bold text-center text-slate-400">
+                <div id="step-1" class="text-brand-600"><i class="fa-solid fa-circle-check block text-sm mb-1"></i>Placed</div>
+                <div id="step-2" class="text-brand-600"><i class="fa-solid fa-motorcycle block text-sm mb-1"></i>Assigned</div>
+                <div id="step-3" class="text-slate-400"><i class="fa-solid fa-basket-shopping block text-sm mb-1"></i>Procuring</div>
+                <div id="step-4" class="text-slate-400"><i class="fa-solid fa-route block text-sm mb-1"></i>In Transit</div>
+                <div id="step-5" class="text-slate-400"><i class="fa-solid fa-circle-dot block text-sm mb-1"></i>Delivered</div>
+              </div>
+            </div>
+
+            <!-- Courier Details -->
+            <div id="tracker-rider-card" class="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-base shadow">
+                  JO
+                </div>
+                <div>
+                  <h4 class="font-bold text-xs text-slate-900">Jared Otieno</h4>
+                  <div class="text-[10px] text-slate-500">TVS Star HLX • Plate: KMDF 420P (★ 4.9 in Homa Bay)</div>
+                </div>
+              </div>
+              <a href="tel:+254712345678" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-brand-600 flex items-center justify-center hover:bg-brand-50 transition shadow-sm">
+                <i class="fa-solid fa-phone text-xs"></i>
+              </a>
+            </div>
+
+            <!-- Customer Receipt Inspection -->
+            <div id="tracker-receipt-box" class="p-3.5 bg-brand-50/70 border border-brand-200 rounded-2xl text-xs text-brand-900">
+              <div class="flex justify-between items-center mb-1.5">
+                <span class="font-bold flex items-center gap-1.5"><i class="fa-solid fa-receipt text-brand-600"></i> Store Receipt Uploaded</span>
+                <button onclick="app.previewCustomerReceipt()" class="text-[11px] font-bold text-brand-700 underline flex items-center gap-1">
+                  <i class="fa-solid fa-eye"></i> View Slip
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-600 leading-normal" id="tracker-receipt-summary">
+                Jared has uploaded photographic till receipt proof. Actual Amount: <strong>KES 990.00</strong>.
+              </p>
+            </div>
+
+            <!-- Cancellation Option -->
+            <div class="text-center pt-2">
+              <button onclick="app.cancelActiveOrder()" class="text-[11px] font-semibold text-rose-500 hover:text-rose-700 underline">
+                Cancel Dispatch Request (Subject to KES 100 cancellation policy)
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <div id="portal-rider" class="portal-container hidden space-y-6">
+      
+      <!-- Courier Profile Bar & Vetting Badge -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="flex items-center space-x-4">
+          <div class="w-14 h-14 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-display font-bold text-2xl shadow-lg shadow-amber-500/30">
+            JO
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 id="rider-profile-name" class="text-lg font-bold text-slate-900">Jared Otieno (GDrop Rider #108)</h2>
+              <span id="rider-compliance-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <i class="fa-solid fa-circle-check mr-1"></i> NTSA VETTED & ACTIVE
+              </span>
+            </div>
+            <p class="text-xs text-slate-500">Plate: <strong>KMDF 420P</strong> • License: <strong>DL-HB-98211</strong> • ID: <strong>31902844</strong></p>
+          </div>
+        </div>
+
+        <!-- Live Telemetry Toggle -->
+        <div class="flex flex-col sm:flex-row items-center gap-3">
+          <button id="btn-stream-gps" onclick="app.toggleGpsStreaming()" class="w-full sm:w-auto px-4 py-2.5 rounded-2xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-white transition flex items-center justify-center gap-2 shadow-sm">
+            <span id="gps-stream-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+            <span id="gps-stream-label">Start Live GPS Telemetry Stream</span>
+          </button>
+          
+          <div class="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-200 text-center">
+            <span class="text-[10px] text-slate-400 font-bold block">TODAY'S PAYOUT</span>
+            <span class="text-base font-extrabold text-slate-900 font-display">KES 2,950.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Assigned Task & Handover Verification -->
+      <div id="rider-active-task-container" class="bg-slate-900 text-white rounded-3xl p-6 shadow-xl space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-4">
+          <div>
+            <span class="text-xs text-brand-400 font-bold uppercase tracking-wider">Active Assigned GDrop Dispatch</span>
+            <h3 class="text-xl font-display font-bold text-white mt-0.5">Order #GDROP-5041</h3>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs bg-brand-500/20 text-brand-300 border border-brand-500/30 px-3 py-1 rounded-full font-bold">
+              Shopping & Concierge
+            </span>
+            <span class="text-xs font-bold text-slate-300">Courier Payout: <strong>KES 380.00</strong></span>
+          </div>
+        </div>
+
+        <!-- Stop By Stop Itinerary -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-2">
+            <span class="text-slate-400 font-bold block uppercase tracking-wider text-[10px]">Stop 1: Shopping Merchant</span>
+            <div class="font-bold text-slate-200 text-sm">Homa Bay Fish Pier & Central Market</div>
+            <p class="text-slate-400">Client Instructions: Select 2 medium fresh Tilapia fish and 2kg maize flour.</p>
+            <div class="mt-2 text-amber-400 font-bold">Estimated Budget: KES 1,010.00</div>
+          </div>
+          <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-2">
+            <span class="text-slate-400 font-bold block uppercase tracking-wider text-[10px]">Stop 2: Delivery Drop-off</span>
+            <div class="font-bold text-slate-200 text-sm">Shauri Yako Estate, Homa Bay</div>
+            <p class="text-slate-400">Customer: Otieno George (+254712345678)</p>
+            <div class="mt-2 text-slate-300">Escrow: M-Pesa Pre-Paid (Full Platform Escrow)</div>
+          </div>
+        </div>
+
+        <!-- PHYSICAL STORE RECEIPT CAMERA UPLOAD & PRICE VARIANCE MODULE -->
+        <div class="bg-slate-800 p-5 rounded-2xl border border-brand-500/40 space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-1">
+            <span class="font-bold text-xs text-brand-400 flex items-center gap-2">
+              <i class="fa-solid fa-camera"></i> Camera Capture: Physical Store Till Slip
+            </span>
+            <span class="text-[11px] text-slate-400">Required for client escrow reconciliation</span>
+          </div>
+
+          <!-- File / Camera Input -->
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+            <div class="sm:col-span-7">
+              <label class="flex flex-col items-center justify-center border-2 border-dashed border-slate-600 hover:border-brand-500 rounded-xl p-3 cursor-pointer bg-slate-900/60 transition text-center">
+                <i class="fa-solid fa-camera-retro text-brand-400 text-lg mb-1"></i>
+                <span class="text-xs font-semibold text-slate-300">Snap Photo of Store Till Slip</span>
+                <span class="text-[10px] text-slate-500">Supports direct mobile camera capture or photo gallery</span>
+                <input type="file" id="rider-receipt-camera-input" accept="image/*" capture="environment" class="hidden" onchange="app.handleRiderReceiptUpload(this)">
+              </label>
+            </div>
+
+            <!-- Receipt Thumbnail & Status Preview -->
+            <div class="sm:col-span-5 flex items-center gap-3">
+              <div id="receipt-thumb-container" class="w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+                <img id="receipt-preview-img" src="" alt="Till Preview" class="w-full h-full object-cover hidden">
+                <i id="receipt-placeholder-icon" class="fa-solid fa-receipt text-slate-600 text-xl"></i>
+              </div>
+              <div class="text-xs">
+                <div id="receipt-status-text" class="font-bold text-slate-300">No receipt attached</div>
+                <button type="button" id="btn-zoom-receipt" onclick="app.previewCustomerReceipt()" class="text-[11px] text-brand-400 underline hidden">Zoom Receipt</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Price Variance Evaluation -->
+          <div class="pt-3 border-t border-slate-700 space-y-2">
+            <label class="block text-xs font-bold text-slate-300">Actual Printed Amount on Merchant Till Receipt (KES)</label>
+            <div class="flex flex-col sm:flex-row items-center gap-3">
+              <div class="relative w-full sm:w-64">
+                <span class="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold">KES</span>
+                <input type="number" id="rider-actual-receipt-val" value="" placeholder="e.g. 990" oninput="app.evaluatePriceVariance()" class="w-full pl-12 pr-4 py-2 bg-slate-900 border border-slate-600 rounded-xl text-sm font-bold text-white focus:ring-2 focus:ring-brand-500">
+              </div>
+              <div id="variance-status-pill" class="text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 border border-slate-700">
+                Awaiting receipt total entry
+              </div>
+            </div>
+            <div id="variance-warning-msg" class="hidden text-xs text-rose-400 font-semibold p-2 bg-rose-950/50 rounded-xl border border-rose-800">
+              <i class="fa-solid fa-triangle-exclamation mr-1"></i> Price exceeds customer estimate by over 10%. Dispatch blocked until customer signs off on the authorization modal.
+            </div>
+          </div>
+        </div>
+
+        <!-- PROOF OF DELIVERY HANDOVER CHALLENGE -->
+        <div class="bg-slate-800 p-5 rounded-2xl border border-amber-500/30 space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-xs text-amber-400 flex items-center gap-2">
+              <i class="fa-solid fa-shield-halved"></i> Proof of Delivery (POD) Handover Verification
+            </span>
+            <span class="text-[11px] text-slate-400">Required to mark delivered</span>
+          </div>
+          <p class="text-xs text-slate-300">
+            Ask the recipient in Homa Bay for their secure <strong>4-digit handover PIN</strong> and enter it here:
+          </p>
+          <div class="flex flex-col sm:flex-row items-center gap-3">
+            <div class="relative w-full sm:w-48">
+              <input type="text" id="rider-pod-input" maxlength="4" placeholder="4-Digit PIN" class="w-full text-center tracking-[0.4em] font-mono font-black text-lg py-2 bg-slate-900 border border-slate-600 rounded-xl text-amber-400 focus:ring-2 focus:ring-amber-500">
+            </div>
+            <button onclick="app.verifyAndCompleteDelivery()" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2">
+              <i class="fa-solid fa-check-double"></i> Validate PIN & Confirm Delivered
+            </button>
+          </div>
+        </div>
+
+        <!-- Rider Journey Actions -->
+        <div class="flex flex-wrap gap-3 pt-2">
+          <button onclick="app.updateDeliveryState('at_store')" class="flex-1 py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold transition">
+            <i class="fa-solid fa-store mr-1.5 text-amber-400"></i> Mark Arrived at Store
+          </button>
+          <button onclick="app.updateDeliveryState('in_transit')" class="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition">
+            <i class="fa-solid fa-motorcycle mr-1.5"></i> Start Transit to Drop-off
+          </button>
+        </div>
+      </div>
+
+      <!-- Nearby Radar Tasks -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex justify-between items-center">
+          <div>
+            <h3 class="font-bold text-base text-slate-900">Available Dispatches Radar (Homa Bay 40km)</h3>
+            <p class="text-xs text-slate-500">Open orders ready for immediate acceptance by certified couriers</p>
+          </div>
+          <span class="text-xs font-bold bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
+            2 Dispatches Near You
+          </span>
+        </div>
+
+        <div class="space-y-3">
+          <div class="p-4 rounded-2xl border border-slate-200 hover:border-brand-500 transition bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-blue-800">EXPRESS COURIER</span>
+                <span class="text-xs font-bold text-slate-900">Posta Homa Bay ➔ Rodi Kopany Junction</span>
+              </div>
+              <div class="text-xs text-slate-500">Legal documents (&lt;1kg) • Distance: 12.4 km (Within 40km zone)</div>
+            </div>
+            <div class="flex items-center gap-4 w-full md:w-auto justify-between">
+              <div class="text-right">
+                <span class="text-sm font-extrabold text-slate-900 block font-display">KES 584.00</span>
+                <span class="text-[10px] text-emerald-600 font-bold">M-Pesa Cleared</span>
+              </div>
+              <button onclick="app.acceptDispatch('#GDROP-5042')" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition shadow-sm">
+                Accept Job
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-2xl border border-slate-200 hover:border-brand-500 transition bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 text-purple-800">MULTI-STOP ERRAND</span>
+                <span class="text-xs font-bold text-slate-900">Chemist near Total ➔ Kendu Bay Road (Arujo)</span>
+              </div>
+              <div class="text-xs text-slate-500">Prescription medicines • 2 stops • Est. Distance: 5.6 km</div>
+            </div>
+            <div class="flex items-center gap-4 w-full md:w-auto justify-between">
+              <div class="text-right">
+                <span class="text-sm font-extrabold text-slate-900 block font-display">KES 466.00</span>
+                <span class="text-[10px] text-amber-600 font-bold">+ KES 80 Tip</span>
+              </div>
+              <button onclick="app.acceptDispatch('#GDROP-5043')" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition shadow-sm">
+                Accept Job
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="portal-admin" class="portal-container hidden space-y-6">
+      
+      <!-- Metrics Overview -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-bold uppercase text-slate-400">Total Registered Users</div>
+          <div id="admin-stat-total-users" class="text-2xl font-extrabold text-slate-900 font-display mt-1">5 Accounts</div>
+          <div id="admin-stat-user-breakdown" class="text-[10px] text-slate-500 mt-1">3 Customers • 2 Couriers</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-bold uppercase text-slate-400">Riders Online / Active</div>
+          <div id="admin-stat-active-riders" class="text-2xl font-extrabold text-amber-500 font-display mt-1">3 Active</div>
+          <div class="text-[10px] text-emerald-600 font-semibold mt-1"><i class="fa-solid fa-motorcycle mr-1"></i> Live in 40km Geofence</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-bold uppercase text-slate-400">Gross Platform Volume</div>
+          <div class="text-2xl font-extrabold text-slate-900 font-display mt-1">KES 94,620</div>
+          <div class="text-[10px] text-emerald-600 font-semibold mt-1"><i class="fa-solid fa-arrow-trend-up mr-1"></i> Homa Bay Hub Commission 8%</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-bold uppercase text-slate-400">Kenya ODPC Status</div>
+          <div class="text-2xl font-extrabold text-brand-600 font-display mt-1">Compliant</div>
+          <div class="text-[10px] text-slate-500 mt-1">Data Protection Act 2019 Active</div>
+        </div>
+      </div>
+
+      <!-- COURIER VETTING & NTSA COMPLIANCE CONSOLE -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-base text-slate-900">Courier Vetting & NTSA Compliance Desk</h3>
+              <span id="pending-vetting-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">1 Rider Pending Vetting</span>
+            </div>
+            <p class="text-xs text-slate-500">Inspect National ID credentials, NTSA bodaboda plates, and issue dispatch authorizations</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-y border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Courier Name</th>
+                <th class="py-3 px-4">National ID</th>
+                <th class="py-3 px-4">NTSA Motorbike Plate</th>
+                <th class="py-3 px-4">Driving License #</th>
+                <th class="py-3 px-4">Vetting Status</th>
+                <th class="py-3 px-4 text-right">Approval Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-vetting-table-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- REGISTERED USERS DIRECTORY & RIGHT TO ERASURE LOG -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-base text-slate-900">User Directory & Data Subject Rights</h3>
+              <span id="user-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-50 text-brand-700 border border-brand-200">5 Users Total</span>
+            </div>
+            <p class="text-xs text-slate-500">Legal names, normalized +254 phone records, and administrative account deletion</p>
+          </div>
+          <input type="text" id="admin-user-search" oninput="app.filterUserDirectory()" placeholder="Search name or +254 phone..." class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-y border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Legal Name</th>
+                <th class="py-3 px-4">Phone (+254)</th>
+                <th class="py-3 px-4">Email</th>
+                <th class="py-3 px-4">Role</th>
+                <th class="py-3 px-4">ODPC Consent</th>
+                <th class="py-3 px-4 text-right">Administrative Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+
+        <!-- Right to Erasure Audit Trail -->
+        <div class="pt-4 border-t border-slate-100">
+          <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Right to Erasure (ODPC Section 40) Audit Trail</h4>
+          <div id="admin-erasure-logs" class="space-y-1 text-[11px] font-mono text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200 max-h-32 overflow-y-auto">
+            <div>[2026-09-25 10:14:02 EAT] Account USR-099 purged upon data subject formal request. Telemetry logs scrubbed.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- AUTHENTICATION & SIGN UP MODAL -->
+  <div id="modal-auth" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto">
+      <button onclick="app.closeAuthModal()" class="absolute right-5 top-5 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+          <i class="fa-solid fa-user-shield"></i>
+        </div>
+        <h3 id="auth-modal-title" class="text-xl font-display font-bold text-slate-900">GDrop Access & Security</h3>
+        <p id="auth-modal-desc" class="text-xs text-slate-500 mt-1">Authenticate to manage your Homa Bay dispatches.</p>
+      </div>
+
+      <!-- Auth Switcher -->
+      <div class="flex bg-slate-100 p-1 rounded-2xl mb-5 text-xs font-semibold">
+        <button id="auth-tab-login" onclick="app.toggleAuthMode('login')" class="flex-1 py-2 rounded-xl bg-white text-slate-900 shadow-sm transition">Sign In</button>
+        <button id="auth-tab-signup" onclick="app.toggleAuthMode('signup')" class="flex-1 py-2 rounded-xl text-slate-600 hover:text-slate-900 transition">Register Account</button>
+      </div>
+
+      <!-- Form -->
+      <form id="auth-form" onsubmit="app.handleAuthSubmit(event)" class="space-y-4">
+        
+        <!-- Legal Name -->
+        <div id="field-signup-name" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            Legal Full Name <span class="text-rose-500">*</span> <span class="text-[10px] text-slate-400 font-normal">(At least 2 names as on National ID)</span>
+          </label>
+          <input type="text" id="auth-fullname" value="" placeholder="e.g. Jared Odhiambo" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- Email -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Email Address <span class="text-rose-500">*</span></label>
+          <input type="email" id="auth-email" required value="" placeholder="e.g. name@gdrop.co.ke" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- Phone (Kenyan 10 digits to +254) -->
+        <div id="field-signup-phone" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            Kenyan Phone Number <span class="text-rose-500">*</span> <span class="text-[10px] text-slate-400 font-normal">(10 digits starting with 07 or 01)</span>
+          </label>
+          <input type="tel" id="auth-phone" maxlength="10" value="" placeholder="e.g. 0712345678" oninput="app.liveValidatePhone(this)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+          <p id="phone-normalized-preview" class="text-[11px] text-slate-500 mt-1">Normalized to: <strong class="text-brand-700 font-mono">+254...</strong></p>
+        </div>
+
+        <!-- COURIER VETTING EXTRA FIELDS -->
+        <div id="field-courier-vetting-group" class="hidden space-y-3 p-3.5 bg-amber-50 rounded-2xl border border-amber-200">
+          <div class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-motorcycle text-amber-600"></i> Courier Verification Credentials (NTSA)
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 mb-0.5">National ID Number <span class="text-rose-500">*</span></label>
+            <input type="text" id="auth-national-id" value="" placeholder="e.g. 31902844" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 mb-0.5">NTSA Bodaboda Number Plate <span class="text-rose-500">*</span></label>
+            <input type="text" id="auth-motorbike-plate" value="" placeholder="e.g. KMDF 123X" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs uppercase">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Driving License Number <span class="text-rose-500">*</span></label>
+            <input type="text" id="auth-license-no" value="" placeholder="e.g. DL-HB-7721" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs">
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            Password <span class="text-rose-500">*</span> <span class="text-[10px] text-slate-400 font-normal">(Min 8 chars, letters & numbers)</span>
+          </label>
+          <input type="password" id="auth-password" required value="" placeholder="e.g. SecretPassword123" oninput="app.liveValidatePassword()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+          <div id="password-strength-pill" class="hidden text-[10px] font-bold mt-1"></div>
+        </div>
+
+        <!-- Password Match -->
+        <div id="field-signup-confirm-pwd" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Confirm Password <span class="text-rose-500">*</span></label>
+          <input type="password" id="auth-password-confirm" value="" placeholder="Repeat your password" oninput="app.liveValidatePasswordMatch()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+          <p id="password-match-msg" class="hidden text-[11px] mt-1 font-semibold"></p>
+        </div>
+
+        <!-- Role -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Platform Role</label>
+          <select id="auth-role" onchange="app.handleRoleChangeInAuth(this)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+            <option value="customer">Customer (Homa Bay Client)</option>
+            <option value="rider">GDrop Courier / Rider (Requires Vetting)</option>
+            <option value="admin">System Operations Administrator</option>
+          </select>
+        </div>
+
+        <!-- KENYA ODPC COMPLIANCE CHECKBOX -->
+        <div id="field-signup-odpc" class="hidden items-start gap-2 pt-1">
+          <input type="checkbox" id="auth-odpc-consent" class="mt-0.5 rounded text-brand-600 focus:ring-brand-500">
+          <label for="auth-odpc-consent" class="text-[11px] text-slate-600 leading-snug">
+            I agree to the processing of my National ID, phone number, and location telemetry under the <strong>Kenya Data Protection Act 2019</strong>.
+          </label>
+        </div>
+
+        <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition">
+          Sign In to GDrop
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- RECEIPT ZOOM MODAL -->
+  <div id="modal-receipt-zoom" class="hidden fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative space-y-4">
+      <button onclick="app.closeReceiptZoomModal()" class="absolute right-5 top-5 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-receipt text-brand-600 text-lg"></i>
+        <h3 class="font-display font-bold text-slate-900 text-base">Store Till Slip Verification</h3>
+      </div>
+      <div class="w-full h-80 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center">
+        <img id="zoom-receipt-img" src="" alt="Till Receipt Preview" class="w-full h-full object-contain">
+      </div>
+      <div class="flex justify-between items-center text-xs text-slate-500 px-1">
+        <span>Uploaded by Courier: <strong>Jared Otieno</strong></span>
+        <span>Status: <strong class="text-emerald-600">Reconciled</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHOPPING VARIANCE RE-AUTHORIZATION MODAL (>10%) -->
+  <div id="modal-variance" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4">
+      <div class="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-2xl font-bold">
+        <i class="fa-solid fa-scale-unbalanced"></i>
+      </div>
+      <div>
+        <h3 class="font-display font-bold text-lg text-slate-900">Price Variance Exceeds 10%</h3>
+        <p class="text-xs text-slate-500 mt-1">In-store merchant prices in Homa Bay exceeded your estimated budget threshold.</p>
+      </div>
+
+      <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-2 text-left">
+        <div class="flex justify-between"><span class="text-slate-500">Estimated Budget:</span> <span id="modal-variance-est" class="font-bold text-slate-800">KES 1,010.00</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Actual Till Receipt:</span> <span id="modal-variance-actual" class="font-bold text-rose-600">KES 1,180.00</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Variance Delta:</span> <span id="modal-variance-percent" class="font-bold text-rose-600">+16.8% (Exceeds 10%)</span></div>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-snug">
+        Do you authorize GDrop to adjust your platform escrow to cover the actual till balance?
+      </p>
+
+      <div class="space-y-2 pt-2">
+        <button onclick="app.approvePriceVariance()" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs transition">
+          Authorize Difference & Continue Dispatch
+        </button>
+        <button onclick="app.rejectPriceVariance()" class="w-full py-2.5 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-slate-50 transition">
+          Decline & Restrict to Estimated Budget
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCOUNT MANAGEMENT & RIGHT TO ERASURE MODAL -->
+  <div id="modal-account" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative">
+      <button onclick="app.closeAccountModal()" class="absolute right-5 top-5 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+
+      <div class="flex items-center space-x-3 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg">
+          <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <div>
+          <h3 class="font-display font-bold text-lg text-slate-900">Account Management</h3>
+          <p class="text-xs text-slate-500">Manage credentials & Kenya ODPC rights</p>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs mb-6">
+        <div class="flex justify-between"><span class="text-slate-500">Legal Name:</span> <strong id="acc-details-name" class="text-slate-800">Otieno George</strong></div>
+        <div class="flex justify-between"><span class="text-slate-500">Standardized Phone:</span> <strong id="acc-details-phone" class="text-slate-800 font-mono">+254712345678</strong></div>
+        <div class="flex justify-between"><span class="text-slate-500">Email Address:</span> <strong id="acc-details-email" class="text-slate-800">george@gdrop.co.ke</strong></div>
+        <div class="flex justify-between"><span class="text-slate-500">Role Status:</span> <span id="acc-details-role" class="px-2 py-0.5 rounded font-bold text-[10px] bg-brand-100 text-brand-800 uppercase">Customer</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">ODPC Consent:</span> <span class="text-emerald-700 font-bold"><i class="fa-solid fa-check"></i> Granted (2019 Act)</span></div>
+      </div>
+
+      <!-- Danger Zone / Right to Erasure -->
+      <div class="border-t border-slate-200 pt-5 space-y-3">
+        <div class="flex items-center gap-2 text-rose-600 font-bold text-xs uppercase tracking-wider">
+          <i class="fa-solid fa-trash-can"></i> Right to Erasure (ODPC Section 40)
+        </div>
+        <p class="text-[11px] text-slate-500 leading-relaxed">
+          Exercising your statutory right to deletion will permanently erase your identification, credentials, order histories, and telemetry logs.
+        </p>
+
+        <button onclick="app.customerSelfDeleteAccount()" class="w-full py-3 px-4 rounded-xl border-2 border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-user-xmark"></i> Permanently Delete My Account & Telemetry
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SMS OTP VERIFICATION MODAL -->
+  <div id="modal-otp" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+      <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl font-bold">
+        <i class="fa-solid fa-comment-sms"></i>
+      </div>
+      <div>
+        <h3 class="font-display font-bold text-lg text-slate-900">SMS Verification</h3>
+        <p class="text-xs text-slate-500 mt-1">We sent a 6-digit verification code to <span id="otp-phone-display" class="font-bold text-slate-800"></span></p>
+      </div>
+
+      <div class="flex justify-center gap-2 py-2">
+        <input type="text" maxlength="6" id="otp-input" value="739218" class="w-40 text-center tracking-[0.5em] text-lg font-black px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500">
+      </div>
+
+      <button onclick="app.verifyOtpCode()" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs transition">
+        Validate & Complete Registration
+      </button>
+    </div>
+  </div>
+
+  <!-- M-PESA STK PUSH INTERACTION MODAL -->
+  <div id="modal-mpesa" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-5">
+      <div class="w-14 h-14 rounded-2xl bg-mpesa-light text-mpesa flex items-center justify-center mx-auto text-2xl font-bold shadow-sm">
+        <i class="fa-solid fa-mobile-screen-button"></i>
+      </div>
+      
+      <div>
+        <span class="text-[10px] uppercase font-bold text-mpesa tracking-wider">Safaricom Daraja API • Homa Bay</span>
+        <h3 class="font-display font-bold text-lg text-slate-900 mt-0.5">M-Pesa STK Push Initiated</h3>
+        <p class="text-xs text-slate-500 mt-1">Enter your M-Pesa PIN on the handset dialog to authorize payment.</p>
+      </div>
+
+      <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2 text-left">
+        <div class="flex justify-between"><span class="text-slate-500">Paybill Business:</span><span class="font-bold text-slate-800">400200 (GDrop Kenya)</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Account Ref:</span><span class="font-bold text-slate-800">GDROP-5041</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Amount Due:</span><span id="mpesa-modal-amount" class="font-bold text-mpesa text-sm">KES 563.00</span></div>
+      </div>
+
+      <div class="bg-slate-900 text-white p-3 rounded-xl text-left text-[11px] font-mono border border-slate-700 animate-pulse">
+        Do you want to pay KES 563.00 to GDROP CONCIERGE HOMA BAY Account GDROP-5041? Enter PIN: ****
+      </div>
+
+      <div class="space-y-2">
+        <button onclick="app.confirmMpesaSuccess()" class="w-full py-3 rounded-xl bg-mpesa hover:bg-mpesa-dark text-white font-bold text-xs transition shadow-lg shadow-mpesa/20">
+          <i class="fa-solid fa-check mr-1.5"></i> Simulate PIN Entered & Cleared
+        </button>
+        <button onclick="app.cancelMpesaPrompt()" class="w-full py-2 text-slate-400 hover:text-slate-600 text-xs font-semibold">
+          Dismiss / Abort Transaction
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    class GDropApp {
+      constructor() {
+        this.users = [
+          {
+            id: 'USR-101',
+            name: "Otieno George",
+            email: "george@gdrop.co.ke",
+            phone: "+254712345678",
+            password: "Password123",
+            role: "customer",
+            completedOrdersCount: 3,
+            odpcConsent: true
+          },
+          {
+            id: 'USR-102',
+            name: "Sharon Anyango",
+            email: "sharon@gdrop.co.ke",
+            phone: "+254722987654",
+            password: "Password123",
+            role: "customer",
+            completedOrdersCount: 5,
+            odpcConsent: true
+          },
+          {
+            id: 'USR-103',
+            name: "Jared Otieno",
+            email: "jared@gdrop.co.ke",
+            phone: "+254733112233",
+            password: "RiderPass1",
+            role: "rider",
+            nationalId: "31902844",
+            plate: "KMDF 420P",
+            licenseNo: "DL-HB-98211",
+            vettingStatus: "VERIFIED",
+            completedOrdersCount: 42,
+            odpcConsent: true
+          },
+          {
+            id: 'USR-104',
+            name: "Faith Akinyi",
+            email: "admin@gdrop.co.ke",
+            phone: "+254799001122",
+            password: "AdminPass2026",
+            role: "admin",
+            completedOrdersCount: 0,
+            odpcConsent: true
+          },
+          {
+            id: 'USR-105',
+            name: "Maurice Omondi",
+            email: "maurice@gdrop.co.ke",
+            phone: "+254701445566",
+            password: "RiderPass2",
+            role: "rider",
+            nationalId: "28411902",
+            plate: "KMDF 891B",
+            licenseNo: "DL-HB-4410",
+            vettingStatus: "PENDING_VETTING",
+            completedOrdersCount: 0,
+            odpcConsent: true
+          }
+        ];
+
+        this.currentUser = this.users[0];
+
+        this.serviceType = 'courier';
+        this.courierDirection = 'send';
+        this.baseFare = 150.0;
+        this.ratePerKm = 35.0;
+        this.minimumFare = 250.0;
+        this.shoppingCommissionRate = 0.08;
+        this.multiStopFeePerStop = 120.0;
+        this.cancellationFee = 100.0;
+
+        this.HOMA_BAY_CENTER = {
+          lat: -0.5273,
+          lng: 34.4571,
+          name: "Homa Bay Town Posta Hub"
+        };
+        this.MAX_RADIUS_KM = 40.0;
+
+        this.estimatedDistanceKm = 11.8;
+        this.shoppingGoodsEstimatedSubtotal = 0.0;
+        this.selectedTip = 0.0;
+        this.weightSurcharge = 0.0;
+        this.extraStopsCount = 0;
+
+        this.activeOrderPodPin = "8492";
+        this.uploadedReceiptDataUrl = "https://images.unsplash.com/photo-1554415707-9e4901614fef?auto=format&fit=crop&w=600&q=80";
+
+        this.isGpsStreaming = false;
+        this.watchPositionId = null;
+
+        this.map = null;
+        this.geofenceCircle = null;
+        this.originMarker = null;
+        this.destMarker = null;
+        this.riderMarker = null;
+        this.routePolyline = null;
+
+        this.coords = {
+          origin: [-0.5273, 34.4571],
+          destination: [-0.5847, 34.5028],
+          courier: [-0.5400, 34.4690]
+        };
+
+        this.activeAuthMode = 'login';
+        this.pendingSignup = null;
+      }
+
+      init() {
+        this.initSessionLifecycles();
+        this.initMap();
+        this.updatePaymentEligibilityUI();
+        this.updateFareQuote();
+        this.updateCourierDirectionUI();
+        this.renderAdminVettingTable();
+        this.renderAdminUserDirectory();
+        this.updateUserSessionUI();
+        this.evaluatePriceVariance();
+      }
+
+      /* -------------------------------------------------------------
+       * PSEUDO-TEXT PLACEHOLDER & AUTO-LOCATION STYLING ENGINE
+       * ----------------------------------------------------------- */
+      setAutoLocationStyling(element, isAutoLocated) {
+        if (!element) return;
+        if (isAutoLocated && element.value.trim() !== '') {
+          element.classList.add('auto-located');
+        } else {
+          element.classList.remove('auto-located');
+        }
+      }
+
+      handleManualLocationInput(element) {
+        // If modified manually, clear the auto-located highlight
+        this.setAutoLocationStyling(element, false);
+      }
+
+      /* -------------------------------------------------------------
+       * SESSION LIFECYCLES (5-MIN RELOAD, 20-MIN EXPIRY)
+       * ----------------------------------------------------------- */
+      initSessionLifecycles() {
+        const TIMEOUT_RESET_VIEW_MS = 5 * 60 * 1000;
+        const TIMEOUT_EXPIRE_SESSION_MS = 20 * 60 * 1000;
+
+        const recordActivity = () => {
+          localStorage.setItem('gdrop_last_active_timestamp', Date.now().toString());
+        };
+
+        ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
+          window.addEventListener(evt, recordActivity, { passive: true });
+        });
+
+        const lastActive = parseInt(localStorage.getItem('gdrop_last_active_timestamp'), 10);
+        const persistedView = localStorage.getItem('gdrop_active_view') || 'customer';
+        const now = Date.now();
+
+        if (lastActive) {
+          const elapsed = now - lastActive;
+          if (elapsed >= TIMEOUT_EXPIRE_SESSION_MS) {
+            this.currentUser = null;
+            localStorage.removeItem('gdrop_session_user');
+            localStorage.setItem('gdrop_active_view', 'customer');
+            setTimeout(() => {
+              this.showToast("Session Expired", "20 minutes of inactivity elapsed. Please log back in.", "info");
+              this.openAuthModal('login');
+            }, 500);
+          } else if (elapsed >= TIMEOUT_RESET_VIEW_MS) {
+            localStorage.setItem('gdrop_active_view', 'customer');
+            this.setPortalView('customer');
+          } else {
+            this.setPortalView(persistedView);
+          }
+        }
+        recordActivity();
+      }
+
+      /* -------------------------------------------------------------
+       * PROOF OF DELIVERY (POD) PIN ENGINE
+       * ----------------------------------------------------------- */
+      generateNewPodPin() {
+        this.activeOrderPodPin = Math.floor(1000 + Math.random() * 9000).toString();
+        document.getElementById('tracker-pod-code').innerText = this.activeOrderPodPin;
+      }
+
+      verifyAndCompleteDelivery() {
+        const enteredPin = document.getElementById('rider-pod-input').value.trim();
+        if (enteredPin === this.activeOrderPodPin) {
+          this.advanceOrderStep(5);
+          this.showToast("Proof of Delivery Verified", "4-digit handover PIN confirmed. Delivery settled.", "success");
+        } else {
+          this.showToast("Invalid Handover PIN", "The 4-digit PIN does not match the client's token. Check with recipient.", "error");
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * STORE RECEIPT CAMERA CAPTURE & PRICE VARIANCE LOGIC
+       * ----------------------------------------------------------- */
+      handleRiderReceiptUpload(input) {
+        if (input.files && input.files[0]) {
+          const file = input.files[0];
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            this.uploadedReceiptDataUrl = e.target.result;
+            const img = document.getElementById('receipt-preview-img');
+            const icon = document.getElementById('receipt-placeholder-icon');
+            const status = document.getElementById('receipt-status-text');
+            const zoomBtn = document.getElementById('btn-zoom-receipt');
+
+            img.src = this.uploadedReceiptDataUrl;
+            img.classList.remove('hidden');
+            icon.classList.add('hidden');
+            status.innerText = `${file.name.substring(0, 16)}... (Attached)`;
+            status.className = "font-bold text-emerald-400 text-xs";
+            zoomBtn.classList.remove('hidden');
+
+            const actualVal = document.getElementById('rider-actual-receipt-val').value || '990';
+            document.getElementById('tracker-receipt-summary').innerHTML = `
+              Official paper till slip uploaded by courier. Amount: <strong>KES ${actualVal}</strong>.
+            `;
+            this.showToast("Receipt Captured", "Physical store receipt synchronized with client tracking.", "success");
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      previewCustomerReceipt() {
+        const modal = document.getElementById('modal-receipt-zoom');
+        const img = document.getElementById('zoom-receipt-img');
+        img.src = this.uploadedReceiptDataUrl;
+        modal.classList.remove('hidden');
+      }
+
+      closeReceiptZoomModal() {
+        document.getElementById('modal-receipt-zoom').classList.add('hidden');
+      }
+
+      evaluatePriceVariance() {
+        const estimatedBudget = this.shoppingGoodsEstimatedSubtotal || 1010.0;
+        const rawInput = document.getElementById('rider-actual-receipt-val')?.value;
+        const pill = document.getElementById('variance-status-pill');
+        const warning = document.getElementById('variance-warning-msg');
+
+        if (!pill) return;
+
+        if (!rawInput || rawInput.trim() === '') {
+          pill.className = "text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 border border-slate-700";
+          pill.innerText = "Awaiting receipt total entry";
+          warning.classList.add('hidden');
+          return;
+        }
+
+        const actualInput = parseFloat(rawInput);
+        const delta = actualInput - estimatedBudget;
+        const percentVariance = (delta / estimatedBudget) * 100;
+
+        if (percentVariance > 10.0) {
+          pill.className = "text-xs font-semibold px-3 py-1.5 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30";
+          pill.innerHTML = `Variance: +${percentVariance.toFixed(1)}% (Exceeds 10% limit)`;
+          warning.classList.remove('hidden');
+          
+          document.getElementById('modal-variance-est').innerText = `KES ${estimatedBudget.toFixed(2)}`;
+          document.getElementById('modal-variance-actual').innerText = `KES ${actualInput.toFixed(2)}`;
+          document.getElementById('modal-variance-percent').innerText = `+${percentVariance.toFixed(1)}% (Threshold: 10%)`;
+          document.getElementById('modal-variance').classList.remove('hidden');
+        } else {
+          pill.className = "text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+          pill.innerHTML = `Variance: ${percentVariance >= 0 ? '+' : ''}${percentVariance.toFixed(1)}% (Within allowable 10%)`;
+          warning.classList.add('hidden');
+        }
+      }
+
+      approvePriceVariance() {
+        document.getElementById('modal-variance').classList.add('hidden');
+        this.showToast("Variance Authorized", "Client approved price adjustment. Rider authorized to proceed.", "success");
+      }
+
+      rejectPriceVariance() {
+        document.getElementById('modal-variance').classList.add('hidden');
+        document.getElementById('rider-actual-receipt-val').value = this.shoppingGoodsEstimatedSubtotal.toFixed(0);
+        this.evaluatePriceVariance();
+        this.showToast("Variance Declined", "Courier instructed to restrict purchases to original budget.", "info");
+      }
+
+      /* -------------------------------------------------------------
+       * LIVE GPS TELEMETRY STREAMING ENGINE
+       * ----------------------------------------------------------- */
+      toggleGpsStreaming() {
+        const btn = document.getElementById('btn-stream-gps');
+        const dot = document.getElementById('gps-stream-dot');
+        const label = document.getElementById('gps-stream-label');
+
+        if (!this.isGpsStreaming) {
+          if (!navigator.geolocation) {
+            this.showToast("GPS Unsupported", "Device does not support location telemetry.", "error");
+            return;
+          }
+
+          this.isGpsStreaming = true;
+          dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-ping";
+          label.innerText = "Broadcasting Live GPS Telemetry";
+          btn.classList.add('border', 'border-emerald-500');
+
+          this.watchPositionId = navigator.geolocation.watchPosition(
+            (pos) => {
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+              this.coords.courier = [lat, lng];
+              if (this.riderMarker) {
+                this.riderMarker.setLatLng([lat, lng]);
+              }
+            },
+            (err) => {
+              this.showToast("GPS Fallback Active", "Using network telemetry interpolation in Homa Bay.", "info");
+            },
+            { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+          );
+
+          this.showToast("Telemetry Active", "Courier coordinates streaming live to dispatch radar.", "success");
+        } else {
+          this.isGpsStreaming = false;
+          if (this.watchPositionId) navigator.geolocation.clearWatch(this.watchPositionId);
+          dot.className = "w-2 h-2 rounded-full bg-slate-400";
+          label.innerText = "Start Live GPS Telemetry Stream";
+          btn.classList.remove('border', 'border-emerald-500');
+          this.showToast("Telemetry Stopped", "Live GPS streaming deactivated.", "info");
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * COURIER VETTING & NTSA COMPLIANCE
+       * ----------------------------------------------------------- */
+      renderAdminVettingTable() {
+        const tbody = document.getElementById('admin-vetting-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const couriers = this.users.filter(u => u.role === 'rider');
+        const pendingCount = couriers.filter(u => u.vettingStatus === 'PENDING_VETTING').length;
+        document.getElementById('pending-vetting-badge').innerText = `${pendingCount} Rider${pendingCount === 1 ? '' : 's'} Pending Vetting`;
+
+        couriers.forEach(courier => {
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-50/80 transition";
+          const isPending = courier.vettingStatus === 'PENDING_VETTING';
+
+          tr.innerHTML = `
+            <td class="py-3 px-4 font-bold text-slate-900">${courier.name}</td>
+            <td class="py-3 px-4 font-mono">${courier.nationalId || 'N/A'}</td>
+            <td class="py-3 px-4 font-mono font-bold">${courier.plate || 'N/A'}</td>
+            <td class="py-3 px-4 font-mono text-slate-500">${courier.licenseNo || 'N/A'}</td>
+            <td class="py-3 px-4">
+              <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${isPending ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+                ${courier.vettingStatus}
+              </span>
+            </td>
+            <td class="py-3 px-4 text-right">
+              ${isPending ? `
+                <button onclick="app.approveCourierVetting('${courier.id}')" class="px-3 py-1 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-[11px] transition shadow-sm">
+                  <i class="fa-solid fa-stamp mr-1"></i> Approve License & Plate
+                </button>
+              ` : `
+                <span class="text-[11px] font-semibold text-emerald-600"><i class="fa-solid fa-check"></i> Certified</span>
+              `}
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      approveCourierVetting(courierId) {
+        const courier = this.users.find(u => u.id === courierId);
+        if (courier) {
+          courier.vettingStatus = 'VERIFIED';
+          this.renderAdminVettingTable();
+          this.showToast("Courier Approved", `${courier.name} has been verified and authorized for Homa Bay dispatches.`, "success");
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * AUTHENTICATION & VALIDATION ENGINE
+       * ----------------------------------------------------------- */
+      validateLegalNames(fullName) {
+        if (!fullName) return false;
+        const parts = fullName.trim().split(/\s+/);
+        return parts.length >= 2 && parts.every(p => p.length >= 2);
+      }
+
+      normalizeKenyanPhone(rawPhone) {
+        if (!rawPhone) return { isValid: false, normalized: '' };
+        let clean = rawPhone.replace(/[\s\-\(\)]/g, '');
+        const tenDigitRegex = /^(07\d{8}|01\d{8})$/;
+        if (tenDigitRegex.test(clean)) {
+          return { isValid: true, normalized: `+254${clean.substring(1)}` };
+        }
+        const intlRegex = /^\+254(7\d{8}|1\d{8})$/;
+        if (intlRegex.test(clean)) {
+          return { isValid: true, normalized: clean };
+        }
+        return { isValid: false, normalized: clean };
+      }
+
+      validatePasswordRules(password) {
+        return password && password.length >= 8 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password);
+      }
+
+      liveValidatePhone(input) {
+        const res = this.normalizeKenyanPhone(input.value);
+        const preview = document.getElementById('phone-normalized-preview');
+        if (res.isValid) {
+          preview.innerHTML = `Normalized: <strong class="text-brand-700 font-mono">${res.normalized}</strong> <i class="fa-solid fa-check text-brand-600"></i>`;
+        } else {
+          preview.innerHTML = `Format: <strong>07XXXXXXXX</strong> or <strong>01XXXXXXXX</strong> (10 digits)`;
+        }
+      }
+
+      liveValidatePassword() {
+        if (this.activeAuthMode !== 'signup') return;
+        const pwd = document.getElementById('auth-password').value;
+        const pill = document.getElementById('password-strength-pill');
+        pill.classList.remove('hidden');
+
+        if (this.validatePasswordRules(pwd)) {
+          pill.className = "text-[10px] font-bold mt-1 text-emerald-600";
+          pill.innerHTML = `<i class="fa-solid fa-check-circle"></i> Password meets alphanumeric standard (8+ chars).`;
+        } else {
+          pill.className = "text-[10px] font-bold mt-1 text-rose-500";
+          pill.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> Must be at least 8 characters with letters & numbers.`;
+        }
+        this.liveValidatePasswordMatch();
+      }
+
+      liveValidatePasswordMatch() {
+        if (this.activeAuthMode !== 'signup') return;
+        const pwd = document.getElementById('auth-password').value;
+        const confirmPwd = document.getElementById('auth-password-confirm').value;
+        const matchMsg = document.getElementById('password-match-msg');
+        matchMsg.classList.remove('hidden');
+
+        if (!confirmPwd) {
+          matchMsg.classList.add('hidden');
+          return;
+        }
+
+        if (pwd === confirmPwd) {
+          matchMsg.className = "text-[11px] mt-1 font-semibold text-emerald-600";
+          matchMsg.innerHTML = `<i class="fa-solid fa-check"></i> Passwords match.`;
+        } else {
+          matchMsg.className = "text-[11px] mt-1 font-semibold text-rose-500";
+          matchMsg.innerHTML = `<i class="fa-solid fa-xmark"></i> Passwords do not match.`;
+        }
+      }
+
+      handleRoleChangeInAuth(select) {
+        const group = document.getElementById('field-courier-vetting-group');
+        if (select.value === 'rider' && this.activeAuthMode === 'signup') {
+          group.classList.remove('hidden');
+        } else {
+          group.classList.add('hidden');
+        }
+      }
+
+      openAuthModal(initialMode = 'login') {
+        document.getElementById('modal-auth').classList.remove('hidden');
+        this.toggleAuthMode(initialMode);
+      }
+
+      closeAuthModal() {
+        document.getElementById('modal-auth').classList.add('hidden');
+      }
+
+      toggleAuthMode(mode) {
+        this.activeAuthMode = mode;
+        const nameField = document.getElementById('field-signup-name');
+        const phoneField = document.getElementById('field-signup-phone');
+        const confirmPwdField = document.getElementById('field-signup-confirm-pwd');
+        const odpcField = document.getElementById('field-signup-odpc');
+        const courierGroup = document.getElementById('field-courier-vetting-group');
+        const submitBtn = document.getElementById('auth-submit-btn');
+        const tabLogin = document.getElementById('auth-tab-login');
+        const tabSignup = document.getElementById('auth-tab-signup');
+        const roleSelect = document.getElementById('auth-role');
+
+        if (mode === 'signup') {
+          nameField.classList.remove('hidden');
+          phoneField.classList.remove('hidden');
+          confirmPwdField.classList.remove('hidden');
+          odpcField.classList.remove('hidden');
+          odpcField.classList.add('flex');
+          if (roleSelect.value === 'rider') courierGroup.classList.remove('hidden');
+          submitBtn.innerText = "Agree & Send SMS Verification";
+          tabSignup.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          tabSignup.classList.remove('text-slate-600');
+          tabLogin.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+          tabLogin.classList.add('text-slate-600');
+        } else {
+          nameField.classList.add('hidden');
+          phoneField.classList.add('hidden');
+          confirmPwdField.classList.add('hidden');
+          odpcField.classList.add('hidden');
+          courierGroup.classList.add('hidden');
+          document.getElementById('password-strength-pill').classList.add('hidden');
+          document.getElementById('password-match-msg').classList.add('hidden');
+          submitBtn.innerText = "Sign In to GDrop";
+          tabLogin.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          tabLogin.classList.remove('text-slate-600');
+          tabSignup.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+          tabSignup.classList.add('text-slate-600');
+        }
+      }
+
+      handleAuthSubmit(e) {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value.trim();
+        const password = document.getElementById('auth-password').value;
+        const role = document.getElementById('auth-role').value;
+
+        if (this.activeAuthMode === 'signup') {
+          const fullname = document.getElementById('auth-fullname').value.trim();
+          const rawPhone = document.getElementById('auth-phone').value.trim();
+          const confirmPwd = document.getElementById('auth-password-confirm').value;
+          const odpcChecked = document.getElementById('auth-odpc-consent').checked;
+
+          if (!this.validateLegalNames(fullname)) {
+            this.showToast("Legal Name Required", "Please provide at least two official names as registered on your National ID.", "error");
+            return;
+          }
+
+          const phoneResult = this.normalizeKenyanPhone(rawPhone);
+          if (!phoneResult.isValid) {
+            this.showToast("Invalid Kenyan Phone", "Phone number must be exactly 10 digits starting with 07 or 01 (e.g. 0712345678).", "error");
+            return;
+          }
+
+          if (!this.validatePasswordRules(password)) {
+            this.showToast("Weak Password", "Password must be at least 8 characters long and contain both letters and numbers.", "error");
+            return;
+          }
+
+          if (password !== confirmPwd) {
+            this.showToast("Password Mismatch", "The repeated password does not match.", "error");
+            return;
+          }
+
+          if (!odpcChecked) {
+            this.showToast("ODPC Consent Required", "You must consent to statutory processing under the Kenya Data Protection Act 2019.", "error");
+            return;
+          }
+
+          let vettingStatus = 'VERIFIED';
+          let nationalId = '';
+          let plate = '';
+          let licenseNo = '';
+
+          if (role === 'rider') {
+            nationalId = document.getElementById('auth-national-id').value.trim();
+            plate = document.getElementById('auth-motorbike-plate').value.trim().toUpperCase();
+            licenseNo = document.getElementById('auth-license-no').value.trim();
+
+            if (!nationalId || !plate || !licenseNo) {
+              this.showToast("Vetting Info Missing", "Please supply National ID, Bodaboda Plate, and Driving License number.", "error");
+              return;
+            }
+            vettingStatus = 'PENDING_VETTING';
+          }
+
+          this.pendingSignup = {
+            id: `USR-${Math.floor(1000 + Math.random() * 9000)}`,
+            name: fullname,
+            email: email,
+            phone: phoneResult.normalized,
+            password: password,
+            role: role,
+            nationalId: nationalId,
+            plate: plate,
+            licenseNo: licenseNo,
+            vettingStatus: vettingStatus,
+            completedOrdersCount: 0,
+            odpcConsent: true
+          };
+
+          this.closeAuthModal();
+          document.getElementById('otp-phone-display').innerText = phoneResult.normalized;
+          document.getElementById('modal-otp').classList.remove('hidden');
+
+        } else {
+          const matchedUser = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+          if (!matchedUser) {
+            this.showToast("Account Not Found", "No account registered with this email address. Please register.", "error");
+            return;
+          }
+
+          if (matchedUser.password !== password) {
+            this.showToast("Incorrect Password", "Authentication failed. The password provided is incorrect.", "error");
+            return;
+          }
+
+          this.currentUser = matchedUser;
+          this.closeAuthModal();
+          this.updateUserSessionUI();
+          this.setPortalView(matchedUser.role);
+          this.showToast("Signed In Successfully", `Welcome back, ${matchedUser.name}!`, "success");
+        }
+      }
+
+      verifyOtpCode() {
+        const code = document.getElementById('otp-input').value;
+        if (code && code.length === 6) {
+          document.getElementById('modal-otp').classList.add('hidden');
+          this.users.push(this.pendingSignup);
+          this.currentUser = this.pendingSignup;
+          this.pendingSignup = null;
+
+          this.updateUserSessionUI();
+          this.renderAdminVettingTable();
+          this.renderAdminUserDirectory();
+          this.setPortalView(this.currentUser.role);
+          this.showToast("Account Verified", "SMS token validated. Account created successfully under Kenya ODPC guidelines.", "success");
+        } else {
+          this.showToast("Invalid OTP", "Please enter the complete 6-digit confirmation code.", "error");
+        }
+      }
+
+      updateUserSessionUI() {
+        const signedInBlock = document.getElementById('auth-signed-in');
+        const signedOutBlock = document.getElementById('auth-signed-out');
+
+        if (this.currentUser) {
+          signedInBlock.classList.remove('hidden');
+          signedOutBlock.classList.add('hidden');
+          document.getElementById('user-display-name').innerText = this.currentUser.name;
+          document.getElementById('user-order-tier').innerText = `${this.currentUser.completedOrdersCount} Orders Verified`;
+          
+          document.getElementById('acc-details-name').innerText = this.currentUser.name;
+          document.getElementById('acc-details-phone').innerText = this.currentUser.phone;
+          document.getElementById('acc-details-email').innerText = this.currentUser.email;
+          document.getElementById('acc-details-role').innerText = this.currentUser.role;
+        } else {
+          signedInBlock.classList.add('hidden');
+          signedOutBlock.classList.remove('hidden');
+        }
+
+        this.updatePaymentEligibilityUI();
+      }
+
+      logoutUser() {
+        this.currentUser = null;
+        this.updateUserSessionUI();
+        this.setPortalView('customer');
+        this.showToast("Signed Out", "You have been signed out of GDrop.", "info");
+      }
+
+      /* -------------------------------------------------------------
+       * ODPC RIGHT TO ERASURE & ACCOUNT DELETION
+       * ----------------------------------------------------------- */
+      openAccountModal() {
+        if (!this.currentUser) {
+          this.openAuthModal('login');
+          return;
+        }
+        document.getElementById('modal-account').classList.remove('hidden');
+      }
+
+      closeAccountModal() {
+        document.getElementById('modal-account').classList.add('hidden');
+      }
+
+      customerSelfDeleteAccount() {
+        if (!this.currentUser) return;
+        const confirmed = confirm(`Are you sure you want to permanently delete your GDrop account (${this.currentUser.email}) under Section 40 of the Kenya Data Protection Act? This deletes all telemetry and trip history.`);
+        if (!confirmed) return;
+
+        const deletedName = this.currentUser.name;
+        const deletedId = this.currentUser.id;
+
+        this.users = this.users.filter(u => u.id !== deletedId);
+        
+        const logBox = document.getElementById('admin-erasure-logs');
+        if (logBox) {
+          const entry = document.createElement('div');
+          entry.innerText = `[${new Date().toISOString().replace('T', ' ').substring(0, 19)} EAT] Account ${deletedId} (${deletedName}) purged under ODPC Right to Erasure.`;
+          logBox.prepend(entry);
+        }
+
+        this.currentUser = null;
+        this.closeAccountModal();
+        this.updateUserSessionUI();
+        this.renderAdminVettingTable();
+        this.renderAdminUserDirectory();
+        this.setPortalView('customer');
+        this.showToast("Account Scrubbed", `All data for ${deletedName} has been purged.`, "error");
+      }
+
+      /* -------------------------------------------------------------
+       * ADMIN USER DIRECTORY
+       * ----------------------------------------------------------- */
+      renderAdminUserDirectory() {
+        const tbody = document.getElementById('admin-users-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const searchVal = (document.getElementById('admin-user-search')?.value || '').toLowerCase();
+
+        const filtered = this.users.filter(u => 
+          u.name.toLowerCase().includes(searchVal) ||
+          u.phone.toLowerCase().includes(searchVal) ||
+          u.email.toLowerCase().includes(searchVal)
+        );
+
+        document.getElementById('admin-stat-total-users').innerText = `${this.users.length} Accounts`;
+        document.getElementById('user-count-badge').innerText = `${this.users.length} Users Total`;
+
+        filtered.forEach(user => {
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-50/80 transition";
+          tr.innerHTML = `
+            <td class="py-3 px-4 font-bold text-slate-900">${user.name}</td>
+            <td class="py-3 px-4 font-mono font-medium">${user.phone}</td>
+            <td class="py-3 px-4 text-slate-500">${user.email}</td>
+            <td class="py-3 px-4 font-bold uppercase text-[10px]">${user.role}</td>
+            <td class="py-3 px-4 text-emerald-600 font-semibold"><i class="fa-solid fa-circle-check"></i> Consented</td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="app.adminDeleteUser('${user.id}')" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[11px] transition">
+                <i class="fa-solid fa-trash-can mr-1"></i> Erase
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      filterUserDirectory() {
+        this.renderAdminUserDirectory();
+      }
+
+      adminDeleteUser(userId) {
+        const target = this.users.find(u => u.id === userId);
+        if (!target) return;
+        if (this.currentUser && this.currentUser.id === userId) {
+          this.showToast("Action Forbidden", "You cannot delete your own active administrator profile.", "error");
+          return;
+        }
+
+        if (confirm(`Erase account record for ${target.name}?`)) {
+          this.users = this.users.filter(u => u.id !== userId);
+          this.renderAdminVettingTable();
+          this.renderAdminUserDirectory();
+          this.showToast("User Erased", `${target.name} removed from registry.`, "success");
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * GEOLOCATION & 40KM GEOFENCE (HOMA BAY)
+       * ----------------------------------------------------------- */
+      calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = 
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+      }
+
+      requestBrowserLocation() {
+        const btnText = document.getElementById('loc-btn-text');
+        const pill = document.getElementById('loc-status-pill');
+
+        if (!navigator.geolocation) {
+          this.showToast("Geolocation Unsupported", "Your browser does not support GPS location access.", "error");
+          return;
+        }
+
+        btnText.innerText = "Locating GPS...";
+        pill.innerText = "Requesting permission...";
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const userLat = pos.coords.latitude;
+            const userLng = pos.coords.longitude;
+            const distFromHub = this.calculateHaversineDistance(this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng, userLat, userLng);
+
+            btnText.innerText = "Location Active";
+            if (distFromHub <= this.MAX_RADIUS_KM) {
+              pill.innerText = `Within Zone (${distFromHub.toFixed(1)}km from Posta)`;
+              pill.className = "text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-800 text-emerald-200 font-semibold border border-emerald-700";
+              this.showToast("GDrop Geofence Verified", `Located ${distFromHub.toFixed(1)} km from Homa Bay Town Center.`, "success");
+            } else {
+              pill.innerText = `Outside 40km Hub (${distFromHub.toFixed(1)}km away)`;
+              pill.className = "text-[10px] px-2.5 py-0.5 rounded-full bg-rose-900 text-rose-200 font-semibold border border-rose-800";
+              this.showToast("Outside Service Boundary", `Location is ${distFromHub.toFixed(1)}km from Homa Bay. GDrop operates within a 40km perimeter.`, "error");
+            }
+          },
+          () => {
+            btnText.innerText = "Detect GPS Location";
+            pill.innerText = "Permission Denied / Posta Default";
+            this.showToast("Location Denied", "Using default Homa Bay Town Center coordinates.", "info");
+          },
+          { timeout: 10000, enableHighAccuracy: true }
+        );
+      }
+
+      fillOriginWithCurrentLocation() {
+        const originInput = document.getElementById('courier-origin');
+        if (navigator.geolocation) {
+          originInput.value = "Detecting current coordinates...";
+          originInput.classList.remove('auto-located');
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos.coords.latitude.toFixed(4);
+              const lng = pos.coords.longitude.toFixed(4);
+              originInput.value = `Current Location (${lat}, ${lng}) — Homa Bay`;
+              this.setAutoLocationStyling(originInput, true);
+              this.recalculateRoute();
+              this.showToast("Origin Detected", "GPS location acquired and verified.", "success");
+            },
+            () => {
+              originInput.value = "Homa Bay Town Posta Hub (GPS Fallback)";
+              this.setAutoLocationStyling(originInput, true);
+              this.recalculateRoute();
+            },
+            { timeout: 8000 }
+          );
+        } else {
+          originInput.value = "Homa Bay Town Posta Hub (Default)";
+          this.setAutoLocationStyling(originInput, true);
+          this.recalculateRoute();
+        }
+      }
+
+      fillDestWithCurrentLocation() {
+        const destInput = document.getElementById('courier-destination');
+        if (navigator.geolocation) {
+          destInput.value = "Detecting current coordinates...";
+          destInput.classList.remove('auto-located');
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos.coords.latitude.toFixed(4);
+              const lng = pos.coords.longitude.toFixed(4);
+              destInput.value = `Current Spot (${lat}, ${lng}) — Homa Bay`;
+              this.setAutoLocationStyling(destInput, true);
+              this.recalculateRoute();
+              this.showToast("Destination Detected", "GPS location acquired and verified.", "success");
+            },
+            () => {
+              destInput.value = "Homa Bay Waterfront (GPS Fallback)";
+              this.setAutoLocationStyling(destInput, true);
+              this.recalculateRoute();
+            },
+            { timeout: 8000 }
+          );
+        } else {
+          destInput.value = "Homa Bay Waterfront (Default)";
+          this.setAutoLocationStyling(destInput, true);
+          this.recalculateRoute();
+        }
+      }
+
+      fillShoppingDropWithCurrentLocation() {
+        const dropInput = document.getElementById('shopping-dropoff');
+        if (navigator.geolocation) {
+          dropInput.value = "Detecting current coordinates...";
+          dropInput.classList.remove('auto-located');
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos.coords.latitude.toFixed(4);
+              const lng = pos.coords.longitude.toFixed(4);
+              dropInput.value = `Current Address (${lat}, ${lng}) — Homa Bay`;
+              this.setAutoLocationStyling(dropInput, true);
+              this.recalculateRoute();
+              this.showToast("Drop-off Detected", "GPS location attached to shopping order.", "success");
+            },
+            () => {
+              dropInput.value = "Shauri Yako Estate (GPS Fallback)";
+              this.setAutoLocationStyling(dropInput, true);
+              this.recalculateRoute();
+            },
+            { timeout: 8000 }
+          );
+        } else {
+          dropInput.value = "Shauri Yako Estate (Default)";
+          this.setAutoLocationStyling(dropInput, true);
+          this.recalculateRoute();
+        }
+      }
+
+      selectPresetLocation(name) {
+        if (this.courierDirection === 'send') {
+          const dest = document.getElementById('courier-destination');
+          dest.value = name;
+          this.setAutoLocationStyling(dest, true);
+        } else {
+          const orig = document.getElementById('courier-origin');
+          orig.value = name;
+          this.setAutoLocationStyling(orig, true);
+        }
+        this.recalculateRoute();
+      }
+
+      /* -------------------------------------------------------------
+       * SEND VS RECEIVE COURIER LOGIC
+       * ----------------------------------------------------------- */
+      setCourierDirection(direction) {
+        this.courierDirection = direction;
+        const btnSend = document.getElementById('direction-btn-send');
+        const btnReceive = document.getElementById('direction-btn-receive');
+        const explainer = document.getElementById('direction-explainer');
+        const originLabel = document.getElementById('courier-origin-label');
+        const destLabel = document.getElementById('courier-dest-label');
+
+        if (direction === 'send') {
+          btnSend.className = "py-2 px-3 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2";
+          btnReceive.className = "py-2 px-3 rounded-xl text-slate-600 font-bold text-xs hover:text-slate-900 transition flex items-center justify-center gap-2";
+          explainer.innerText = "You are sending a package from your location to a recipient in Homa Bay County.";
+          originLabel.innerHTML = `<i class="fa-solid fa-circle-dot text-brand-600 mr-1"></i> Origin (Your Pickup Point)`;
+          destLabel.innerHTML = `<i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Destination (Recipient Drop-off)`;
+        } else {
+          btnReceive.className = "py-2 px-3 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2";
+          btnSend.className = "py-2 px-3 rounded-xl text-slate-600 font-bold text-xs hover:text-slate-900 transition flex items-center justify-center gap-2";
+          explainer.innerText = "A GDrop courier will collect an item from a sender or merchant and bring it to you.";
+          originLabel.innerHTML = `<i class="fa-solid fa-circle-dot text-brand-600 mr-1"></i> Collection Point (Sender's Address)`;
+          destLabel.innerHTML = `<i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Your Destination (Where You Will Receive It)`;
+        }
+        this.updateFareQuote();
+      }
+
+      updateCourierDirectionUI() {
+        this.setCourierDirection(this.courierDirection);
+      }
+
+      /* -------------------------------------------------------------
+       * PORTAL SWITCHER
+       * ----------------------------------------------------------- */
+      setPortalView(portalName) {
+        document.querySelectorAll('.portal-container').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.portal-tab').forEach(btn => {
+          btn.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+          btn.classList.add('text-slate-600');
+        });
+
+        const activeBtn = document.getElementById(`nav-btn-${portalName}`);
+        const activeContainer = document.getElementById(`portal-${portalName}`);
+
+        if (activeBtn && activeContainer) {
+          activeBtn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          activeBtn.classList.remove('text-slate-600');
+          activeContainer.classList.remove('hidden');
+        }
+
+        localStorage.setItem('gdrop_active_view', portalName);
+        if (portalName === 'customer' && this.map) {
+          setTimeout(() => { this.map.invalidateSize(); }, 200);
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * SERVICE & TARIFF COMPUTATION
+       * ----------------------------------------------------------- */
+      setServiceType(type) {
+        this.serviceType = type;
+        const courierTab = document.getElementById('tab-service-courier');
+        const shoppingTab = document.getElementById('tab-service-shopping');
+        const courierForm = document.getElementById('section-courier-form');
+        const shoppingForm = document.getElementById('section-shopping-form');
+
+        if (type === 'courier') {
+          courierTab.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          courierTab.classList.remove('text-slate-600');
+          shoppingTab.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+          shoppingTab.classList.add('text-slate-600');
+          courierForm.classList.remove('hidden');
+          shoppingForm.classList.add('hidden');
+        } else {
+          shoppingTab.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          shoppingTab.classList.remove('text-slate-600');
+          courierTab.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+          courierTab.classList.add('text-slate-600');
+          shoppingForm.classList.remove('hidden');
+          courierForm.classList.add('hidden');
+        }
+
+        this.updatePaymentEligibilityUI();
+        this.updateFareQuote();
+      }
+
+      setTip(amount) {
+        this.selectedTip = amount;
+        document.querySelectorAll('.tip-btn').forEach(btn => {
+          btn.classList.remove('bg-brand-600', 'text-white', 'border-brand-600');
+          btn.classList.add('bg-white', 'border-slate-200');
+        });
+        if (event && event.target) {
+          event.target.classList.add('bg-brand-600', 'text-white', 'border-brand-600');
+          event.target.classList.remove('bg-white', 'border-slate-200');
+        }
+        this.updateFareQuote();
+      }
+
+      toggleScheduleField() {
+        const toggle = document.getElementById('schedule-toggle');
+        const scheduleContainer = document.getElementById('schedule-inputs');
+        if (toggle.checked) scheduleContainer.classList.remove('hidden');
+        else scheduleContainer.classList.add('hidden');
+      }
+
+      addShoppingStop() {
+        const container = document.getElementById('shopping-stops-list');
+        const stopIndex = container.children.length + 1;
+        const div = document.createElement('div');
+        div.className = "flex items-center gap-2 stop-item";
+        div.innerHTML = `
+          <span class="w-6 h-6 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">${stopIndex}</span>
+          <input type="text" value="" placeholder="Stop ${stopIndex}: Chemist or Store in Homa Bay" class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+          <button onclick="app.removeShoppingStop(this)" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+        `;
+        container.appendChild(div);
+        this.extraStopsCount++;
+        this.updateFareQuote();
+      }
+
+      removeShoppingStop(btn) {
+        btn.parentElement.remove();
+        this.extraStopsCount = Math.max(0, this.extraStopsCount - 1);
+        this.updateFareQuote();
+      }
+
+      addShoppingItemRow() {
+        const container = document.getElementById('shopping-items-container');
+        const div = document.createElement('div');
+        div.className = "flex items-center gap-2 item-row bg-slate-50 p-2 rounded-xl border border-slate-200";
+        div.innerHTML = `
+          <input type="text" placeholder="Item description" value="" class="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+          <input type="number" placeholder="Qty" value="" min="1" class="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-center" oninput="app.calculateShoppingSubtotal()">
+          <div class="relative w-28">
+            <span class="absolute left-2 top-2 text-[10px] text-slate-400 font-bold">KES</span>
+            <input type="number" placeholder="Est. Price" value="" min="0" class="w-full pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-right item-budget" oninput="app.calculateShoppingSubtotal()">
+          </div>
+          <button onclick="app.removeShoppingItemRow(this)" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+        `;
+        container.appendChild(div);
+        this.calculateShoppingSubtotal();
+      }
+
+      removeShoppingItemRow(btn) {
+        btn.closest('.item-row').remove();
+        this.calculateShoppingSubtotal();
+      }
+
+      calculateShoppingSubtotal() {
+        let sum = 0;
+        document.querySelectorAll('.item-row').forEach(row => {
+          const budgetInput = row.querySelector('.item-budget');
+          const qtyInput = row.querySelectorAll('input')[1];
+          const price = parseFloat(budgetInput?.value) || 0;
+          const qty = parseInt(qtyInput?.value) || 1;
+          sum += (price * qty);
+        });
+        this.shoppingGoodsEstimatedSubtotal = sum;
+        document.getElementById('shopping-goods-sum').innerText = `KES ${sum.toFixed(2)}`;
+        this.evaluatePriceVariance();
+        this.updateFareQuote();
+      }
+
+      updateFareQuote() {
+        const distanceFare = this.estimatedDistanceKm * this.ratePerKm;
+        document.getElementById('fare-dist-label').innerText = `Distance Tariff (est. ${this.estimatedDistanceKm.toFixed(1)} km @ KES ${this.ratePerKm}/km)`;
+        document.getElementById('fare-dist-cost').innerText = `KES ${distanceFare.toFixed(2)}`;
+
+        if (this.serviceType === 'courier') {
+          const selectedWeight = document.querySelector('input[name="weight-tier"]:checked')?.value || 'light';
+          if (selectedWeight === 'medium') this.weightSurcharge = 60.0;
+          else if (selectedWeight === 'heavy') this.weightSurcharge = 140.0;
+          else this.weightSurcharge = 0.0;
+        } else {
+          this.weightSurcharge = 0.0;
+        }
+
+        const stopsSurcharge = this.serviceType === 'shopping' ? (this.extraStopsCount * this.multiStopFeePerStop) : 0;
+        const totalSurcharges = this.weightSurcharge + stopsSurcharge;
+
+        const rowSurcharges = document.getElementById('row-surcharges');
+        if (totalSurcharges > 0) {
+          rowSurcharges.classList.remove('hidden');
+          document.getElementById('cost-surcharges').innerText = `KES ${totalSurcharges.toFixed(2)}`;
+        } else {
+          rowSurcharges.classList.add('hidden');
+        }
+
+        let shoppingCommission = 0;
+        const rowCommission = document.getElementById('row-shopping-commission');
+        if (this.serviceType === 'shopping') {
+          shoppingCommission = this.shoppingGoodsEstimatedSubtotal * this.shoppingCommissionRate;
+          rowCommission.classList.remove('hidden');
+          document.getElementById('cost-shopping-commission').innerText = `KES ${shoppingCommission.toFixed(2)}`;
+        } else {
+          rowCommission.classList.add('hidden');
+        }
+
+        let calculatedSubtotal = this.baseFare + distanceFare + totalSurcharges + shoppingCommission + this.selectedTip;
+        const finalPayable = Math.max(this.minimumFare, calculatedSubtotal);
+
+        this.currentQuoteTotal = finalPayable;
+        document.getElementById('grand-total-display').innerText = `KES ${finalPayable.toFixed(2)}`;
+      }
+
+      updatePaymentEligibilityUI() {
+        const podRadio = document.getElementById('radio-pod');
+        const podLabel = document.getElementById('pod-label');
+        const podTitle = document.getElementById('pod-title');
+        const podDesc = document.getElementById('pod-desc');
+        const tag = document.getElementById('payment-eligibility-tag');
+
+        const completed = this.currentUser ? this.currentUser.completedOrdersCount : 0;
+        const isShopping = (this.serviceType === 'shopping');
+
+        if (isShopping) {
+          podRadio.disabled = true;
+          podRadio.checked = false;
+          podLabel.classList.add('opacity-50', 'cursor-not-allowed', 'bg-slate-100');
+          podTitle.innerText = "Pay On Delivery (Unavailable for Shopping)";
+          podDesc.innerText = "Personal shopping concierge requires upfront verified M-Pesa escrow.";
+          tag.innerHTML = `<span class="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Prepayment Mandatory</span>`;
+        } else if (completed < 3) {
+          podRadio.disabled = true;
+          podRadio.checked = false;
+          podLabel.classList.add('opacity-50', 'cursor-not-allowed', 'bg-slate-100');
+          podTitle.innerText = `Pay On Delivery (${3 - completed} more orders to unlock)`;
+          podDesc.innerText = "First 3 deliveries require M-Pesa prepayment to establish client verification.";
+          tag.innerHTML = `<span class="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Pre-Payment Required</span>`;
+        } else {
+          podRadio.disabled = false;
+          podLabel.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-slate-100');
+          podTitle.innerText = "Pay On Delivery (GDrop Business Till)";
+          podDesc.innerText = "Unlocked! Settle via Till once courier verifies Handover PIN.";
+          tag.innerHTML = `<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">POD Unlocked</span>`;
+        }
+      }
+
+      handleOrderSubmission() {
+        if (!this.currentUser) {
+          this.showToast("Sign In Required", "Please sign in or register to dispatch a courier.", "info");
+          this.openAuthModal('login');
+          return;
+        }
+
+        const originVal = document.getElementById('courier-origin').value.trim();
+        const destVal = document.getElementById('courier-destination').value.trim();
+
+        if (this.serviceType === 'courier') {
+          if (!originVal || !destVal) {
+            this.showToast("Locations Required", "Please enter or GPS-detect both pickup and destination locations.", "error");
+            return;
+          }
+          const recName = document.getElementById('courier-recipient-name').value;
+          if (!this.validateLegalNames(recName)) {
+            this.showToast("Recipient Name Required", "Please specify at least two legal names for the recipient.", "error");
+            return;
+          }
+        }
+
+        if (this.estimatedDistanceKm > this.MAX_RADIUS_KM) {
+          this.showToast("Outside 40km Boundary", `This delivery route (${this.estimatedDistanceKm.toFixed(1)} km) exceeds GDrop's 40km perimeter in Homa Bay.`, "error");
+          return;
+        }
+
+        this.generateNewPodPin();
+
+        const paymentMethod = document.querySelector('input[name="payment-method"]:checked')?.value || 'mpesa_prepay';
+        if (paymentMethod === 'mpesa_prepay') {
+          document.getElementById('mpesa-modal-amount').innerText = `KES ${this.currentQuoteTotal.toFixed(2)}`;
+          document.getElementById('modal-mpesa').classList.remove('hidden');
+        } else {
+          this.showToast("GDrop Dispatched", "Courier assigned under Pay-on-Delivery terms.", "success");
+          this.advanceOrderStep(2);
+        }
+      }
+
+      confirmMpesaSuccess() {
+        document.getElementById('modal-mpesa').classList.add('hidden');
+        this.showToast("M-Pesa Cleared", `KES ${this.currentQuoteTotal.toFixed(2)} received by GDrop Paybill. Receipt: RKL984HM21`, "success");
+        this.advanceOrderStep(2);
+      }
+
+      cancelMpesaPrompt() {
+        document.getElementById('modal-mpesa').classList.add('hidden');
+        this.showToast("Transaction Aborted", "M-Pesa payment prompt dismissed.", "info");
+      }
+
+      cancelActiveOrder() {
+        if (confirm("Are you sure you wish to cancel? A KES 100 cancellation fee applies once a GDrop rider has been dispatched.")) {
+          this.showToast("Order Cancelled", "Cancellation logged. KES 100 cancellation charge applied.", "error");
+          document.getElementById('tracker-status-pill').className = "px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200";
+          document.getElementById('tracker-status-pill').innerText = "Cancelled (Fee Applied)";
+          document.getElementById('tracker-progress-bar').style.width = "0%";
+        }
+      }
+
+      advanceOrderStep(stepNumber) {
+        const bar = document.getElementById('tracker-progress-bar');
+        const pill = document.getElementById('tracker-status-pill');
+        
+        for (let i = 1; i <= 5; i++) {
+          const stepEl = document.getElementById(`step-${i}`);
+          if (i <= stepNumber) stepEl.className = "text-brand-600 font-bold";
+          else stepEl.className = "text-slate-400 font-bold";
+        }
+
+        if (stepNumber === 2) {
+          bar.style.width = "40%";
+          pill.innerText = "Courier Assigned";
+          pill.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200";
+        } else if (stepNumber === 3) {
+          bar.style.width = "65%";
+          pill.innerText = "Procuring at Store";
+          pill.className = "px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200";
+          document.getElementById('tracker-receipt-box').classList.remove('hidden');
+        } else if (stepNumber === 4) {
+          bar.style.width = "85%";
+          pill.innerText = "In Transit";
+          pill.className = "px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200";
+          this.animateRiderMarker();
+        } else if (stepNumber === 5) {
+          bar.style.width = "100%";
+          pill.innerText = "Delivered (POD Confirmed)";
+          pill.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200";
+          if (this.currentUser) {
+            this.currentUser.completedOrdersCount += 1;
+            this.updateUserSessionUI();
+          }
+          this.showToast("Delivered Successfully", "Package safely handed over. 4-digit PIN validated.", "success");
+        }
+      }
+
+      acceptDispatch(orderId) {
+        this.showToast("GDrop Job Accepted", `Assigned to ${orderId}. Route active in Homa Bay.`, "success");
+        this.setPortalView('rider');
+      }
+
+      updateDeliveryState(state) {
+        if (state === 'at_store') {
+          this.advanceOrderStep(3);
+          this.showToast("Status Synced", "Marked as At Store.", "info");
+        } else if (state === 'in_transit') {
+          this.advanceOrderStep(4);
+          this.showToast("Transit Begun", "Broadcasting telemetry across Homa Bay route.", "info");
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * MAP INTEGRATION
+       * ----------------------------------------------------------- */
+      initMap() {
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer) return;
+
+        this.map = L.map('map', { zoomControl: true, attributionControl: false })
+          .setView([this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng], 11);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(this.map);
+
+        this.geofenceCircle = L.circle([this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng], {
+          radius: 40000,
+          color: '#10b981',
+          fillColor: '#10b981',
+          fillOpacity: 0.08,
+          weight: 2,
+          dashArray: '5, 5'
+        }).addTo(this.map).bindPopup("<b>GDrop Operating Zone</b><br>40km radius from Homa Bay Town Posta");
+
+        const originIcon = L.divIcon({
+          className: 'custom-map-pin',
+          html: `<div class="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-xs shadow-lg border-2 border-white"><i class="fa-solid fa-location-arrow"></i></div>`,
+          iconSize: [32, 32], iconAnchor: [16, 16]
+        });
+
+        const destIcon = L.divIcon({
+          className: 'custom-map-pin',
+          html: `<div class="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center font-bold text-xs shadow-lg border-2 border-white"><i class="fa-solid fa-location-dot"></i></div>`,
+          iconSize: [32, 32], iconAnchor: [16, 16]
+        });
+
+        const riderIcon = L.divIcon({
+          className: 'custom-map-pin pulse-driver',
+          html: `<div class="w-9 h-9 rounded-full bg-slate-900 text-amber-400 flex items-center justify-center font-bold text-xs shadow-xl border-2 border-amber-400"><i class="fa-solid fa-motorcycle"></i></div>`,
+          iconSize: [36, 36], iconAnchor: [18, 18]
+        });
+
+        this.originMarker = L.marker(this.coords.origin, { icon: originIcon }).addTo(this.map).bindPopup("<b>Pickup</b><br>Homa Bay Posta CBD");
+        this.destMarker = L.marker(this.coords.destination, { icon: destIcon }).addTo(this.map).bindPopup("<b>Destination</b><br>Rodi Kopany");
+        this.riderMarker = L.marker(this.coords.courier, { icon: riderIcon }).addTo(this.map).bindPopup("<b>GDrop Rider</b><br>Jared Otieno (KMDF 420P)");
+
+        this.routePolyline = L.polyline([
+          this.coords.origin,
+          [-0.5400, 34.4690],
+          [-0.5650, 34.4850],
+          this.coords.destination
+        ], { color: '#10b981', weight: 4, opacity: 0.85, dashArray: '6, 6' }).addTo(this.map);
+
+        this.map.fitBounds(this.routePolyline.getBounds(), { padding: [30, 30] });
+      }
+
+      recenterMap() {
+        if (this.map) this.map.setView([this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng], 11);
+      }
+
+      recalculateRoute() {
+        const randomVariation = (Math.random() * 2 - 1).toFixed(1);
+        this.estimatedDistanceKm = Math.max(2.5, parseFloat((11.8 + parseFloat(randomVariation)).toFixed(1)));
+        document.getElementById('route-distance-badge').innerText = `${this.estimatedDistanceKm} km (Est. 24 mins)`;
+        this.updateFareQuote();
+      }
+
+      animateRiderMarker() {
+        if (!this.riderMarker) return;
+        let step = 0;
+        const totalSteps = 20;
+        const startLat = this.coords.origin[0];
+        const startLng = this.coords.origin[1];
+        const endLat = this.coords.destination[0];
+        const endLng = this.coords.destination[1];
+
+        const interval = setInterval(() => {
+          step++;
+          const curLat = startLat + (endLat - startLat) * (step / totalSteps);
+          const curLng = startLng + (endLng - startLng) * (step / totalSteps);
+          this.riderMarker.setLatLng([curLat, curLng]);
+          if (step >= totalSteps) clearInterval(interval);
+        }, 300);
+      }
+
+      /* -------------------------------------------------------------
+       * NOTIFICATIONS
+       * ----------------------------------------------------------- */
+      showToast(title, message, type = 'info') {
+        const toast = document.getElementById('global-toast');
+        const titleEl = document.getElementById('toast-title');
+        const msgEl = document.getElementById('toast-message');
+        const iconEl = document.getElementById('toast-icon');
+
+        titleEl.innerText = title;
+        msgEl.innerText = message;
+
+        if (type === 'success') {
+          iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i>`;
+        } else if (type === 'error') {
+          iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-rose-400"></i>`;
+        } else {
+          iconEl.innerHTML = `<i class="fa-solid fa-circle-info text-blue-400"></i>`;
+        }
+
+        toast.classList.remove('hidden');
+        if (this.toastTimeout) clearTimeout(this.toastTimeout);
+        this.toastTimeout = setTimeout(() => { this.dismissToast(); }, 5000);
+      }
+
+      dismissToast() {
+        document.getElementById('global-toast').classList.add('hidden');
+      }
+    }
+
+    let app;
+    window.addEventListener('DOMContentLoaded', () => {
+      app = new GDropApp();
+      app.init();
+    });
+  </script>
+</body>
+</html>

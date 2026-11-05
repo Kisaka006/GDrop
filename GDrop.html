@@ -1,0 +1,3344 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GDrop — Homa Bay Delivery & Concierge Platform</title>
+
+  <!-- Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>window.__API_BASE__ = 'port/5000';</script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['"Space Grotesk"', 'sans-serif']
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b'
+            },
+            mpesa: {
+              DEFAULT: '#00a859',
+              dark: '#008a49',
+              light: '#e6f7ef'
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Greystyled pseudo-text placeholders across all inputs */
+    input::placeholder,
+    textarea::placeholder {
+      color: #94a3b8 !important; /* Neutral muted slate grey */
+      opacity: 1 !important;
+      font-style: italic !important;
+      font-weight: 400 !important;
+    }
+
+    /* Active styling dynamically applied when location access is granted */
+    .auto-located {
+      color: #0f172a !important;            /* High-contrast slate-900 */
+      background-color: #f0fdf4 !important; /* Gentle emerald tint */
+      border-color: #10b981 !important;     /* Bright emerald boundary */
+      box-shadow: 0 0 0 1px #10b981 !important;
+      font-weight: 600 !important;
+      font-style: normal !important;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f8fafc; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    .map-container {
+      height: 380px;
+      width: 100%;
+      border-radius: 1.25rem;
+      z-index: 10;
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .pulse-driver {
+      animation: pulse-ring 2.2s infinite cubic-bezier(0.45, 0, 0.55, 1);
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans text-slate-800 antialiased selection:bg-brand-500 selection:text-white bg-slate-50">
+
+  <header class="bg-white/95 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Logo -->
+      <div class="flex items-center space-x-2 sm:space-x-3 cursor-pointer shrink-0" onclick="app.setPortalView('customer')">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-brand-700 to-brand-500 flex items-center justify-center text-white shadow-md shadow-brand-500/25">
+          <i class="fa-solid fa-location-arrow text-base"></i>
+        </div>
+        <div>
+          <span class="font-display font-bold text-xl text-slate-900 tracking-tight">G<span class="text-brand-600">Drop</span></span>
+          <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-brand-700 ml-1.5 border border-brand-200 hidden sm:inline">Homa Bay Hub</span>
+        </div>
+      </div>
+
+      <!-- Portal Switcher -->
+      <div class="flex items-center bg-slate-100 p-1 rounded-2xl text-xs font-semibold text-slate-600">
+        <button id="nav-btn-customer" onclick="app.setPortalView('customer')" class="portal-tab px-3 sm:px-3.5 py-1.5 rounded-xl bg-white text-slate-900 shadow-sm transition">
+          <i class="fa-solid fa-bag-shopping sm:mr-1.5 text-brand-600"></i><span class="hidden sm:inline">Customer</span>
+        </button>
+        <button id="nav-btn-rider" onclick="app.setPortalView('rider')" class="portal-tab px-3 sm:px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 transition">
+          <i class="fa-solid fa-motorcycle sm:mr-1.5 text-amber-500"></i><span class="hidden sm:inline">Courier Radar</span>
+        </button>
+        <button id="nav-btn-admin" onclick="app.setPortalView('admin')" class="portal-tab px-3 sm:px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 transition">
+          <i class="fa-solid fa-shield-halved sm:mr-1.5 text-indigo-600"></i><span class="hidden sm:inline">Admin Hub</span>
+        </button>
+      </div>
+
+      <!-- User Profile & Action Bar -->
+      <div class="flex items-center space-x-3 shrink-0">
+        <div id="auth-signed-in" class="flex items-center space-x-2 sm:space-x-3">
+          <div class="hidden sm:flex flex-col text-right">
+            <span id="user-display-name" class="text-xs font-bold text-slate-900">Otieno George</span>
+            <span id="user-order-tier" class="text-[10px] text-brand-700 font-semibold bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">3 Orders Verified</span>
+          </div>
+          <button onclick="app.openAccountModal()" title="Manage Profile & Right to Erasure" class="w-9 h-9 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-slate-200 transition">
+            <i class="fa-solid fa-user-gear text-xs"></i>
+          </button>
+          <button onclick="app.logoutUser()" title="Sign Out" class="px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> <span class="hidden md:inline">Sign Out</span>
+          </button>
+        </div>
+
+        <div id="auth-signed-out" class="hidden items-center space-x-2">
+          <button onclick="app.openAuthModal('login')" class="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 transition">
+            Sign In
+          </button>
+          <button onclick="app.openAuthModal('signup')" class="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold bg-brand-600 text-white hover:bg-brand-700 shadow-sm transition">
+            Register
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Location Access Request Banner & Operational Radius Status -->
+  <div id="location-banner" class="bg-slate-900 text-white border-b border-brand-800 px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-brand-400 animate-ping"></span>
+        <span><strong class="font-bold text-brand-300">GDrop Geofence:</strong> Anchored at <strong>Homa Bay Posta Hub</strong>. Operational radius <strong>40.0 km</strong>.</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="app.requestBrowserLocation()" class="px-3 py-1 rounded-xl bg-brand-500 hover:bg-brand-400 text-slate-950 font-bold transition flex items-center gap-1.5">
+          <i class="fa-solid fa-crosshairs text-xs"></i> <span id="loc-btn-text">Detect GPS Location</span>
+        </button>
+        <span id="loc-status-pill" class="text-[10px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold border border-slate-700">Awaiting GPS Access</span>
+      </div>
+    </div>
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- Global Toast Notifications -->
+    <div id="global-toast" class="hidden fixed bottom-6 right-6 z-50 max-w-md w-full bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700 transition transform duration-300 flex items-start space-x-3">
+      <div id="toast-icon" class="text-brand-400 text-xl mt-0.5"><i class="fa-solid fa-bell"></i></div>
+      <div class="flex-1">
+        <h4 id="toast-title" class="font-bold text-sm leading-tight text-white">System Notification</h4>
+        <p id="toast-message" class="text-xs text-slate-300 mt-1 leading-snug"></p>
+      </div>
+      <button onclick="app.dismissToast()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div id="portal-customer" class="portal-container space-y-8">
+      
+      <!-- Hero Banner -->
+      <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+        <div class="relative z-10 max-w-2xl">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30 mb-3">
+            <i class="fa-solid fa-shield-halved"></i> Proof of Delivery Protected • 40km Geofence
+          </div>
+          <h1 class="text-2xl sm:text-3xl font-display font-bold tracking-tight">Express Parcel Dispatch & Concierge Shopping</h1>
+          <p class="mt-2 text-sm text-slate-300 leading-relaxed">
+            Reliable on-demand logistics across Homa Bay Town, Rodi Kopany, Kendu Bay, Mbita Junction, and Ndhiwa. Every order is secured with a 4-digit handover PIN and digital till receipts.
+          </p>
+          <div class="mt-4 flex flex-wrap gap-4 text-xs font-medium text-slate-300">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-brand-400"></i> Flag-fall KES 150 + KES 35/km</span>
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-basket-shopping text-amber-400"></i> Shopping Commission 8%</span>
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-key text-indigo-400"></i> 4-Digit Handover PIN Protected</span>
+          </div>
+        </div>
+        <div class="absolute right-0 bottom-0 opacity-10 sm:opacity-20 pointer-events-none transform translate-x-10 translate-y-10">
+          <i class="fa-solid fa-truck-fast text-[220px]"></i>
+        </div>
+      </div>
+
+      <!-- Layout Grid: Order Booking & Map Tracking -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        <!-- Left Column: Booking Form -->
+        <div class="lg:col-span-7 space-y-6">
+          <div class="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm">
+            
+            <!-- Service Selector Tabs -->
+            <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl mb-6 text-sm font-semibold">
+              <button id="tab-service-courier" onclick="app.setServiceType('courier')" class="py-2.5 rounded-xl bg-white text-slate-900 shadow-sm transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-box text-brand-600"></i> Courier & Parcels
+              </button>
+              <button id="tab-service-shopping" onclick="app.setServiceType('shopping')" class="py-2.5 rounded-xl text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-basket-shopping text-brand-600"></i> Shopping Concierge
+              </button>
+            </div>
+
+            <!-- SECTION A: COURIER (SEND OR RECEIVE) -->
+            <div id="section-courier-form" class="space-y-5">
+              
+              <!-- Directionality Switcher -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Service Modality</label>
+                <div class="grid grid-cols-2 gap-3 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                  <button type="button" id="direction-btn-send" onclick="app.setCourierDirection('send')" class="py-2 px-3 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i> Send a Parcel
+                  </button>
+                  <button type="button" id="direction-btn-receive" onclick="app.setCourierDirection('receive')" class="py-2 px-3 rounded-xl text-slate-600 font-bold text-xs hover:text-slate-900 transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-inbox"></i> Receive a Parcel
+                  </button>
+                </div>
+                <div id="direction-explainer" class="mt-2 text-[11px] text-slate-500 font-medium px-1">
+                  You are sending a package from your location to a recipient in Homa Bay County.
+                </div>
+              </div>
+
+              <!-- Pickup & Dropoff Inputs with default empty values so grey pseudo-text displays -->
+              <div class="space-y-4 pt-1">
+                <div>
+                  <div class="flex justify-between items-center mb-1.5">
+                    <label id="courier-origin-label" class="text-xs font-bold uppercase tracking-wider text-slate-600">
+                      <i class="fa-solid fa-circle-dot text-brand-600 mr-1"></i> Origin / Pickup Location
+                    </label>
+                    <button type="button" onclick="app.fillOriginWithCurrentLocation()" class="text-[10px] font-bold text-brand-600 hover:underline">
+                      <i class="fa-solid fa-location-crosshairs mr-1"></i> Use My GPS
+                    </button>
+                  </div>
+                  <div class="relative">
+                    <input type="text" id="courier-origin" value="" placeholder="e.g. Homa Bay Posta Hub, CBD, or market stall" class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+                    <i class="fa-solid fa-location-arrow absolute left-3.5 top-3.5 text-slate-400 text-xs"></i>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex justify-between items-center mb-1.5">
+                    <label id="courier-dest-label" class="text-xs font-bold uppercase tracking-wider text-slate-600">
+                      <i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Destination / Delivery Point
+                    </label>
+                    <button type="button" onclick="app.fillDestWithCurrentLocation()" class="text-[10px] font-bold text-brand-600 hover:underline">
+                      <i class="fa-solid fa-location-crosshairs mr-1"></i> Deliver To Me
+                    </button>
+                  </div>
+                  <div class="relative">
+                    <input type="text" id="courier-destination" value="" placeholder="e.g. Rodi Kopany Center, Junction Rd, or Kendu Bay" class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+                    <i class="fa-solid fa-flag-checkered absolute left-3.5 top-3.5 text-slate-400 text-xs"></i>
+                  </div>
+                </div>
+
+                <!-- Quick Location Buttons -->
+                <div class="flex flex-wrap gap-1.5 text-[11px] items-center pt-1">
+                  <span class="text-slate-400 text-[10px] font-bold uppercase">Quick Hubs:</span>
+                  <button type="button" onclick="app.selectPresetLocation('Sofia Estate, Homa Bay')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Sofia</button>
+                  <button type="button" onclick="app.selectPresetLocation('Shauri Yako, Homa Bay')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Shauri Yako</button>
+                  <button type="button" onclick="app.selectPresetLocation('Arujo Area, Kendu Rd')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Arujo</button>
+                  <button type="button" onclick="app.selectPresetLocation('Rodi Kopany Hub (12km)')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Rodi Kopany</button>
+                  <button type="button" onclick="app.selectPresetLocation('Kendu Bay Pier (34km)')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Kendu Bay</button>
+                  <button type="button" onclick="app.selectPresetLocation('Mbita Junction (38km)')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Mbita Junction</button>
+                </div>
+              </div>
+
+              <!-- Recipient Particulars -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label id="courier-contact-name-label" class="block text-xs font-semibold text-slate-600 mb-1">Recipient Legal Name (Min 2 Names)</label>
+                  <input type="text" id="courier-recipient-name" value="" placeholder="e.g. Mercy Achieng" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+                </div>
+                <div>
+                  <label id="courier-contact-phone-label" class="block text-xs font-semibold text-slate-600 mb-1">Recipient Phone (+254)</label>
+                  <input type="tel" id="courier-recipient-phone" value="" placeholder="e.g. 0722123456 or +254722123456" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+                </div>
+              </div>
+
+              <!-- Weight Tiers -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Estimated Parcel Weight Tier</label>
+                <div class="grid grid-cols-3 gap-3">
+                  <label class="cursor-pointer">
+                    <input type="radio" name="weight-tier" value="light" checked class="peer sr-only" onchange="app.updateFareQuote()">
+                    <div class="p-3 text-center rounded-xl border border-slate-200 bg-slate-50 peer-checked:border-brand-600 peer-checked:bg-brand-50/50 peer-checked:text-brand-900 transition">
+                      <i class="fa-solid fa-envelope block text-sm text-brand-600 mb-1"></i>
+                      <div class="text-xs font-bold">Light</div>
+                      <div class="text-[10px] text-slate-500">&lt; 2 kg</div>
+                    </div>
+                  </label>
+                  <label class="cursor-pointer">
+                    <input type="radio" name="weight-tier" value="medium" class="peer sr-only" onchange="app.updateFareQuote()">
+                    <div class="p-3 text-center rounded-xl border border-slate-200 bg-slate-50 peer-checked:border-brand-600 peer-checked:bg-brand-50/50 peer-checked:text-brand-900 transition">
+                      <i class="fa-solid fa-box block text-sm text-brand-600 mb-1"></i>
+                      <div class="text-xs font-bold">Medium</div>
+                      <div class="text-[10px] text-slate-500">2 — 10 kg (+KES 60)</div>
+                    </div>
+                  </label>
+                  <label class="cursor-pointer">
+                    <input type="radio" name="weight-tier" value="heavy" class="peer sr-only" onchange="app.updateFareQuote()">
+                    <div class="p-3 text-center rounded-xl border border-slate-200 bg-slate-50 peer-checked:border-brand-600 peer-checked:bg-brand-50/50 peer-checked:text-brand-900 transition">
+                      <i class="fa-solid fa-dolly block text-sm text-brand-600 mb-1"></i>
+                      <div class="text-xs font-bold">Bulky</div>
+                      <div class="text-[10px] text-slate-500">&gt; 10 kg (+KES 140)</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Scheduled Delivery Checkbox -->
+              <div class="border-t border-slate-100 pt-4">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-semibold text-slate-700">Schedule delivery for a specific timeslot</span>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="schedule-toggle" class="sr-only peer" onchange="app.toggleScheduleField()">
+                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
+                  </label>
+                </div>
+                <div id="schedule-inputs" class="hidden grid grid-cols-2 gap-3 mt-2">
+                  <input type="date" id="schedule-date" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium">
+                  <input type="time" id="schedule-time" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium">
+                </div>
+              </div>
+
+            </div>
+
+            <!-- SECTION B: SHOPPING & MULTI-STOP ERRANDS -->
+            <div id="section-shopping-form" class="hidden space-y-5">
+              
+              <div class="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 text-xs text-amber-900 flex items-start gap-3">
+                <i class="fa-solid fa-basket-shopping text-amber-600 text-sm mt-0.5"></i>
+                <div class="leading-relaxed">
+                  <strong>Personal Shopping Concierge:</strong> Provide an item checklist and budget. Your GDrop runner visits Homa Bay shops, negotiates prices, uploads the official paper till slip with camera proof, and requires your 4-digit PIN upon drop-off.
+                </div>
+              </div>
+
+              <!-- Multi-Stop Configuration -->
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs font-bold uppercase tracking-wider text-slate-600">Merchant Stops (Homa Bay 40km Radius)</label>
+                  <button type="button" onclick="app.addShoppingStop()" class="text-xs font-bold text-brand-600 hover:text-brand-700">
+                    <i class="fa-solid fa-plus-circle mr-1"></i> Add Stop (+KES 120)
+                  </button>
+                </div>
+                
+                <div id="shopping-stops-list" class="space-y-2">
+                  <div class="flex items-center gap-2 stop-item">
+                    <span class="w-6 h-6 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">1</span>
+                    <input type="text" value="" placeholder="e.g. Shivling Supermarket or Homa Bay Fish Market" class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-bold uppercase tracking-wider text-slate-600">Deliver Items To:</label>
+                    <button type="button" onclick="app.fillShoppingDropWithCurrentLocation()" class="text-[10px] font-bold text-brand-600 hover:underline">
+                      <i class="fa-solid fa-location-crosshairs mr-1"></i> Deliver To My Location
+                    </button>
+                  </div>
+                  <input type="text" id="shopping-dropoff" value="" placeholder="e.g. Shauri Yako Estate, near Catholic Church" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+                </div>
+              </div>
+
+              <!-- Itemized Checklist -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-bold uppercase tracking-wider text-slate-600">Item Checklist & Budget</span>
+                  <button type="button" onclick="app.addShoppingItemRow()" class="text-xs font-bold text-brand-600 hover:text-brand-700">
+                    <i class="fa-solid fa-cart-plus mr-1"></i> Add Item
+                  </button>
+                </div>
+
+                <div id="shopping-items-container" class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                  <div class="flex items-center gap-2 item-row bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <input type="text" placeholder="e.g. Fresh Tilapia Fish (Medium)" value="" class="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+                    <input type="number" placeholder="Qty" value="" min="1" class="w-12 sm:w-16 shrink-0 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-center" oninput="app.calculateShoppingSubtotal()">
+                    <div class="relative w-24 sm:w-28 shrink-0">
+                      <span class="absolute left-2 top-2 text-[10px] text-slate-400 font-bold">KES</span>
+                      <input type="number" placeholder="Est. Price" value="" min="0" class="w-full pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-right item-budget" oninput="app.calculateShoppingSubtotal()">
+                    </div>
+                    <button onclick="app.removeShoppingItemRow(this)" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                  </div>
+                  <div class="flex items-center gap-2 item-row bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <input type="text" placeholder="e.g. Unga ya Ugali 2kg packet" value="" class="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+                    <input type="number" placeholder="Qty" value="" min="1" class="w-12 sm:w-16 shrink-0 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-center" oninput="app.calculateShoppingSubtotal()">
+                    <div class="relative w-24 sm:w-28 shrink-0">
+                      <span class="absolute left-2 top-2 text-[10px] text-slate-400 font-bold">KES</span>
+                      <input type="number" placeholder="Est. Price" value="" min="0" class="w-full pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-right item-budget" oninput="app.calculateShoppingSubtotal()">
+                    </div>
+                    <button onclick="app.removeShoppingItemRow(this)" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                  </div>
+                </div>
+
+                <div class="mt-3 flex justify-between items-center text-xs font-semibold px-3 py-2 bg-slate-100 rounded-xl">
+                  <span class="text-slate-600">Estimated Shopping Goods Total:</span>
+                  <span id="shopping-goods-sum" class="font-bold text-slate-900 text-sm">KES 0.00</span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- TARIFF & DISPATCH ACTION -->
+            <div class="mt-6 pt-6 border-t border-slate-200 space-y-4">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Live Itemised Quotation</h4>
+              
+              <div class="space-y-2 text-xs">
+                <div class="flex justify-between text-slate-600">
+                  <span>Base Flag-fall Fare</span>
+                  <span class="font-medium text-slate-900">KES 150.00</span>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span id="fare-dist-label">Distance Tariff (est. 11.8 km @ KES 35/km)</span>
+                  <span id="fare-dist-cost" class="font-medium text-slate-900">KES 413.00</span>
+                </div>
+                <div id="row-surcharges" class="flex justify-between text-slate-600 hidden">
+                  <span id="label-surcharges">Weight & Multi-stop Surcharges</span>
+                  <span id="cost-surcharges" class="font-medium text-slate-900">KES 0.00</span>
+                </div>
+                <div id="row-shopping-commission" class="flex justify-between text-slate-600 hidden">
+                  <span>GDrop Shopping Commission (8%)</span>
+                  <span id="cost-shopping-commission" class="font-medium text-slate-900">KES 0.00</span>
+                </div>
+                
+                <!-- Driver Gratuity / Tip -->
+                <div class="flex justify-between items-center pt-2">
+                  <span class="text-slate-600">Rider Gratuity / Tip</span>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="app.setTip(0)" class="tip-btn px-2.5 py-1 rounded-lg text-[10px] font-bold border border-brand-600 bg-brand-600 text-white">None</button>
+                    <button type="button" onclick="app.setTip(50)" class="tip-btn px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 bg-white">KES 50</button>
+                    <button type="button" onclick="app.setTip(100)" class="tip-btn px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 bg-white">KES 100</button>
+                    <button type="button" onclick="app.setTip(200)" class="tip-btn px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 bg-white">KES 200</button>
+                  </div>
+                </div>
+
+                <!-- Terms Notice -->
+                <div class="p-3 bg-slate-50 rounded-2xl text-[11px] text-slate-500 space-y-1">
+                  <div class="flex items-center justify-between text-slate-700 font-medium">
+                    <span><i class="fa-solid fa-scale-balanced mr-1 text-slate-400"></i> Platform Minimum Fare:</span>
+                    <span>KES 250.00</span>
+                  </div>
+                  <div><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1"></i> Cancellation Fee: KES 100 applied once courier accepts task.</div>
+                  <div class="text-emerald-700 font-medium"><i class="fa-solid fa-shield-halved mr-1"></i> Proof of Delivery: 4-digit code required to finalize.</div>
+                </div>
+
+                <!-- Total Amount -->
+                <div class="pt-3 border-t border-slate-200 flex justify-between items-center">
+                  <div>
+                    <span class="text-xs text-slate-500 block">Total Due</span>
+                    <span id="grand-total-display" class="text-2xl font-black text-slate-900 font-display">KES 563.00</span>
+                  </div>
+                  <div id="payment-eligibility-tag" class="text-right"></div>
+                </div>
+              </div>
+
+              <!-- Payment Method Selection -->
+              <div class="pt-3">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Payment Method</label>
+                <div class="space-y-2">
+                  <label class="flex items-center justify-between p-3.5 border-2 border-mpesa rounded-2xl bg-mpesa-light/30 cursor-pointer">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-xl bg-mpesa text-white flex items-center justify-center font-bold text-xs">M</div>
+                      <div>
+                        <div class="text-xs font-bold text-slate-900">M-Pesa STK Push Instant Pre-Payment</div>
+                        <div class="text-[10px] text-slate-500">Safaricom PIN prompt sent to your verified +254 phone</div>
+                      </div>
+                    </div>
+                    <input type="radio" name="payment-method" value="mpesa_prepay" checked class="text-mpesa focus:ring-mpesa">
+                  </label>
+
+                  <!-- Pay on Delivery -->
+                  <div id="pod-wrapper">
+                    <label id="pod-label" class="flex items-center justify-between p-3.5 border border-slate-200 rounded-2xl bg-white cursor-pointer transition">
+                      <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-xs"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                        <div>
+                          <div class="text-xs font-bold text-slate-800" id="pod-title">Pay On Delivery (M-Pesa Business Till)</div>
+                          <div class="text-[10px] text-slate-500" id="pod-desc">Unlocked for verified frequent clients after 3 completed deliveries.</div>
+                        </div>
+                      </div>
+                      <input type="radio" id="radio-pod" name="payment-method" value="mpesa_pod" disabled class="text-brand-600 focus:ring-brand-500">
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Submit Button -->
+              <button type="button" onclick="app.handleOrderSubmission()" class="w-full py-4 px-6 rounded-2xl font-bold text-white bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 shadow-xl shadow-brand-500/20 active:scale-[0.99] transition flex items-center justify-center gap-2 text-sm sm:text-base">
+                <i class="fa-solid fa-paper-plane"></i> Confirm & Dispatch GDrop Courier
+              </button>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Map & Live Order Tracker -->
+        <div class="lg:col-span-5 space-y-6">
+          
+          <!-- Map Card -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                <h3 class="font-bold text-sm text-slate-900">Live Spatial Route & 40km Radar</h3>
+              </div>
+              <span id="route-distance-badge" class="px-2.5 py-1 bg-slate-100 rounded-full text-[11px] font-extrabold text-slate-700">
+                11.8 km (Est. 24 mins)
+              </span>
+            </div>
+
+            <!-- Leaflet Container -->
+            <div id="map" class="map-container shadow-inner border border-slate-100"></div>
+
+            <div class="flex items-center justify-between text-[11px] text-slate-500 px-1">
+              <span><i class="fa-solid fa-motorcycle text-brand-600 mr-1"></i> Active couriers nearby: <strong id="map-riders-online-txt">3 riders online</strong></span>
+              <button onclick="app.recenterMap()" class="hover:text-brand-600 font-semibold underline">Recenter Homa Bay</button>
+            </div>
+          </div>
+
+          <!-- Tracker empty state -->
+          <div id="tracker-empty" class="bg-white rounded-3xl border border-dashed border-slate-300 p-6 text-center space-y-2">
+            <div class="w-11 h-11 mx-auto rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center"><i class="fa-solid fa-box-open"></i></div>
+            <h3 class="font-display font-bold text-slate-900 text-sm">No active dispatch</h3>
+            <p id="tracker-empty-text" class="text-xs text-slate-500">Sign in and request a courier or personal shopper. Live tracking will appear here.</p>
+            <div id="tracker-history" class="hidden text-left pt-3 border-t border-slate-100 space-y-1.5"></div>
+          </div>
+
+          <!-- Active Tracker Card (With Handover PIN Display) -->
+          <div id="tracker-card" class="hidden bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm space-y-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <span id="tracker-live-label" class="text-[10px] uppercase font-bold text-slate-400">GDrop Real-Time Dispatch</span>
+                <h3 id="tracker-order-id" class="font-display font-bold text-slate-900 text-sm">#GDROP-0000</h3>
+                <p id="tracker-route" class="text-[11px] text-slate-500 mt-0.5"></p>
+              </div>
+              <span id="tracker-status-pill" class="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                Courier Assigned
+              </span>
+            </div>
+
+            <!-- PROOF OF DELIVERY (POD) PIN BOX -->
+            <div class="bg-gradient-to-r from-brand-900 to-slate-900 text-white rounded-2xl p-4 shadow-md flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-brand-300 block">Proof of Delivery (POD)</span>
+                <p class="text-xs text-slate-300">Give this code to rider upon parcel arrival:</p>
+              </div>
+              <div class="text-right">
+                <span id="tracker-pod-code" class="text-2xl font-mono font-black tracking-widest text-emerald-400 bg-slate-800/80 px-3 py-1 rounded-xl border border-brand-500/30">----</span>
+              </div>
+            </div>
+
+            <!-- Progress 5-step Stepper -->
+            <div class="relative py-2">
+              <div class="overflow-hidden h-1.5 mb-4 text-xs flex rounded-full bg-slate-100">
+                <div id="tracker-progress-bar" style="width: 40%" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-brand-500 transition-all duration-700"></div>
+              </div>
+
+              <div class="grid grid-cols-5 text-[10px] font-bold text-center text-slate-400">
+                <div id="step-1" class="text-brand-600"><i class="fa-solid fa-circle-check block text-sm mb-1"></i>Placed</div>
+                <div id="step-2" class="text-brand-600"><i class="fa-solid fa-motorcycle block text-sm mb-1"></i>Assigned</div>
+                <div id="step-3" class="text-slate-400"><i class="fa-solid fa-basket-shopping block text-sm mb-1"></i>Procuring</div>
+                <div id="step-4" class="text-slate-400"><i class="fa-solid fa-route block text-sm mb-1"></i>In Transit</div>
+                <div id="step-5" class="text-slate-400"><i class="fa-solid fa-circle-dot block text-sm mb-1"></i>Delivered</div>
+              </div>
+            </div>
+
+            <!-- Payment status -->
+            <div id="tracker-payment" class="flex items-center justify-between text-[11px] bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
+              <span class="text-slate-500">Payment</span>
+              <span id="tracker-payment-text" class="font-bold text-slate-800"></span>
+            </div>
+            <button id="tracker-pay-btn" onclick="app.retryPayment()" class="hidden w-full py-2.5 rounded-xl bg-mpesa hover:bg-mpesa-dark text-white font-bold text-xs transition">
+              <i class="fa-solid fa-mobile-screen-button mr-1.5"></i> Pay with M-Pesa
+            </button>
+
+            <!-- Courier Details -->
+            <div id="tracker-rider-card" class="hidden bg-slate-50 rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div id="tracker-rider-initials" class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-base shadow">
+                  --
+                </div>
+                <div>
+                  <h4 id="tracker-rider-name" class="font-bold text-xs text-slate-900"></h4>
+                  <div id="tracker-rider-meta" class="text-[10px] text-slate-500"></div>
+                </div>
+              </div>
+              <a id="tracker-rider-call" href="#" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-brand-600 flex items-center justify-center hover:bg-brand-50 transition shadow-sm">
+                <i class="fa-solid fa-phone text-xs"></i>
+              </a>
+            </div>
+
+            <!-- Customer Receipt Inspection -->
+            <div id="tracker-receipt-box" class="hidden p-3.5 bg-brand-50/70 border border-brand-200 rounded-2xl text-xs text-brand-900">
+              <div class="flex justify-between items-center mb-1.5">
+                <span class="font-bold flex items-center gap-1.5"><i class="fa-solid fa-receipt text-brand-600"></i> Store Receipt Uploaded</span>
+                <button onclick="app.previewCustomerReceipt()" class="text-[11px] font-bold text-brand-700 underline flex items-center gap-1">
+                  <i class="fa-solid fa-eye"></i> View Slip
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-600 leading-normal" id="tracker-receipt-summary">
+                Waiting for the courier to upload the till receipt.
+              </p>
+            </div>
+
+            <!-- Cancellation Option -->
+            <div id="tracker-cancel-wrap" class="text-center pt-2">
+              <button onclick="app.cancelActiveOrder()" class="text-[11px] font-semibold text-rose-500 hover:text-rose-700 underline">
+                Cancel Dispatch Request (Subject to KES 100 cancellation policy)
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <div id="portal-rider" class="portal-container hidden space-y-6">
+      
+      <!-- Courier Profile Bar & Vetting Badge -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="flex items-center space-x-4">
+          <div id="rider-avatar" class="w-14 h-14 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-display font-bold text-2xl shadow-lg shadow-amber-500/30">
+            --
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 id="rider-profile-name" class="text-lg font-bold text-slate-900">Courier sign-in required</h2>
+              <span id="rider-compliance-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <i class="fa-solid fa-circle-check mr-1"></i> NTSA VETTED & ACTIVE
+              </span>
+            </div>
+            <p id="rider-profile-meta" class="text-xs text-slate-500">Sign in with a courier account to see your jobs.</p>
+          </div>
+        </div>
+
+        <!-- Live Telemetry Toggle -->
+        <div class="flex flex-col sm:flex-row items-center gap-3">
+          <button id="btn-stream-gps" onclick="app.toggleGpsStreaming()" class="w-full sm:w-auto px-4 py-2.5 rounded-2xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-white transition flex items-center justify-center gap-2 shadow-sm">
+            <span id="gps-stream-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+            <span id="gps-stream-label">Start Live GPS Telemetry Stream</span>
+          </button>
+          
+          <div class="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-200 text-center">
+            <span class="text-[10px] text-slate-400 font-bold block">TODAY'S PAYOUT</span>
+            <span id="rider-today-payout" class="text-base font-extrabold text-slate-900 font-display">KES 0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- No active job -->
+      <div id="rider-no-active" class="bg-slate-900 text-white rounded-3xl p-6 shadow-xl text-center space-y-2">
+        <div class="w-11 h-11 mx-auto rounded-2xl bg-slate-800 text-amber-400 flex items-center justify-center"><i class="fa-solid fa-motorcycle"></i></div>
+        <h3 class="font-display font-bold text-base">No active dispatch</h3>
+        <p id="rider-no-active-text" class="text-xs text-slate-400">Accept a job from the radar below to start a delivery.</p>
+      </div>
+
+      <!-- Active Assigned Task & Handover Verification -->
+      <div id="rider-active-task-container" class="hidden bg-slate-900 text-white rounded-3xl p-6 shadow-xl space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-4">
+          <div>
+            <span class="text-xs text-brand-400 font-bold uppercase tracking-wider">Active Assigned GDrop Dispatch</span>
+            <h3 id="rider-active-order-id" class="text-xl font-display font-bold text-white mt-0.5">Order #GDROP-0000</h3>
+            <p id="rider-active-status" class="text-[11px] text-slate-400 mt-0.5"></p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="rider-active-service" class="text-xs bg-brand-500/20 text-brand-300 border border-brand-500/30 px-3 py-1 rounded-full font-bold">
+              Shopping & Concierge
+            </span>
+            <span class="text-xs font-bold text-slate-300">Courier Payout: <strong id="rider-active-payout">KES 0.00</strong></span>
+          </div>
+        </div>
+
+        <!-- Stop By Stop Itinerary -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-2">
+            <span id="rider-stop1-label" class="text-slate-400 font-bold block uppercase tracking-wider text-[10px]">Stop 1: Pickup</span>
+            <div id="rider-stop1-title" class="font-bold text-slate-200 text-sm"></div>
+            <p id="rider-stop1-notes" class="text-slate-400"></p>
+            <div id="rider-stop1-budget" class="mt-2 text-amber-400 font-bold"></div>
+          </div>
+          <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-2">
+            <span class="text-slate-400 font-bold block uppercase tracking-wider text-[10px]">Final Stop: Delivery Drop-off</span>
+            <div id="rider-stop2-title" class="font-bold text-slate-200 text-sm"></div>
+            <p id="rider-stop2-notes" class="text-slate-400"></p>
+            <div id="rider-stop2-escrow" class="mt-2 text-slate-300"></div>
+          </div>
+        </div>
+
+        <!-- PHYSICAL STORE RECEIPT CAMERA UPLOAD & PRICE VARIANCE MODULE -->
+        <div id="rider-receipt-module" class="bg-slate-800 p-5 rounded-2xl border border-brand-500/40 space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-1">
+            <span class="font-bold text-xs text-brand-400 flex items-center gap-2">
+              <i class="fa-solid fa-camera"></i> Camera Capture: Physical Store Till Slip
+            </span>
+            <span class="text-[11px] text-slate-400">Required for client escrow reconciliation</span>
+          </div>
+
+          <!-- File / Camera Input -->
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+            <div class="sm:col-span-7">
+              <label class="flex flex-col items-center justify-center border-2 border-dashed border-slate-600 hover:border-brand-500 rounded-xl p-3 cursor-pointer bg-slate-900/60 transition text-center">
+                <i class="fa-solid fa-camera-retro text-brand-400 text-lg mb-1"></i>
+                <span class="text-xs font-semibold text-slate-300">Snap Photo of Store Till Slip</span>
+                <span class="text-[10px] text-slate-500">Supports direct mobile camera capture or photo gallery</span>
+                <input type="file" id="rider-receipt-camera-input" accept="image/*" capture="environment" class="hidden" onchange="app.handleRiderReceiptUpload(this)">
+              </label>
+            </div>
+
+            <!-- Receipt Thumbnail & Status Preview -->
+            <div class="sm:col-span-5 flex items-center gap-3">
+              <div id="receipt-thumb-container" class="w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+                <img id="receipt-preview-img" src="" alt="Till Preview" class="w-full h-full object-cover hidden">
+                <i id="receipt-placeholder-icon" class="fa-solid fa-receipt text-slate-600 text-xl"></i>
+              </div>
+              <div class="text-xs">
+                <div id="receipt-status-text" class="font-bold text-slate-300">No receipt attached</div>
+                <button type="button" id="btn-zoom-receipt" onclick="app.previewCustomerReceipt()" class="text-[11px] text-brand-400 underline hidden">Zoom Receipt</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Price Variance Evaluation -->
+          <div class="pt-3 border-t border-slate-700 space-y-2">
+            <label class="block text-xs font-bold text-slate-300">Actual Printed Amount on Merchant Till Receipt (KES)</label>
+            <div class="flex flex-col sm:flex-row items-center gap-3">
+              <div class="relative w-full sm:w-64">
+                <span class="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold">KES</span>
+                <input type="number" id="rider-actual-receipt-val" value="" placeholder="e.g. 990" oninput="app.evaluatePriceVariance()" onchange="app.submitReceiptAmount()" class="w-full pl-12 pr-4 py-2 bg-slate-900 border border-slate-600 rounded-xl text-sm font-bold text-white focus:ring-2 focus:ring-brand-500">
+              </div>
+              <div id="variance-status-pill" class="text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 border border-slate-700">
+                Awaiting receipt total entry
+              </div>
+            </div>
+            <div id="variance-warning-msg" class="hidden text-xs text-rose-400 font-semibold p-2 bg-rose-950/50 rounded-xl border border-rose-800">
+              <i class="fa-solid fa-triangle-exclamation mr-1"></i> Price exceeds customer estimate by over 10%. Dispatch blocked until customer signs off on the authorization modal.
+            </div>
+          </div>
+        </div>
+
+        <!-- PROOF OF DELIVERY HANDOVER CHALLENGE -->
+        <div class="bg-slate-800 p-5 rounded-2xl border border-amber-500/30 space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-xs text-amber-400 flex items-center gap-2">
+              <i class="fa-solid fa-shield-halved"></i> Proof of Delivery (POD) Handover Verification
+            </span>
+            <span class="text-[11px] text-slate-400">Required to mark delivered</span>
+          </div>
+          <p class="text-xs text-slate-300">
+            Ask the recipient in Homa Bay for their secure <strong>4-digit handover PIN</strong> and enter it here:
+          </p>
+          <div class="flex flex-col sm:flex-row items-center gap-3">
+            <div class="relative w-full sm:w-48">
+              <input type="text" id="rider-pod-input" maxlength="4" placeholder="4-Digit PIN" class="w-full text-center tracking-[0.4em] font-mono font-black text-lg py-2 bg-slate-900 border border-slate-600 rounded-xl text-amber-400 focus:ring-2 focus:ring-amber-500">
+            </div>
+            <button onclick="app.verifyAndCompleteDelivery()" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2">
+              <i class="fa-solid fa-check-double"></i> Validate PIN & Confirm Delivered
+            </button>
+          </div>
+        </div>
+
+        <!-- Rider Journey Actions -->
+        <div class="flex flex-wrap gap-3 pt-2">
+          <button id="rider-btn-at-store" onclick="app.updateDeliveryState('at_store')" class="flex-1 py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold transition">
+            <i class="fa-solid fa-store mr-1.5 text-amber-400"></i> Mark Arrived at Store
+          </button>
+          <button id="rider-btn-in-transit" onclick="app.updateDeliveryState('in_transit')" class="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition">
+            <i class="fa-solid fa-motorcycle mr-1.5"></i> Start Transit to Drop-off
+          </button>
+        </div>
+      </div>
+
+      <!-- Nearby Radar Tasks -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex justify-between items-center">
+          <div>
+            <h3 class="font-bold text-base text-slate-900">Available Dispatches Radar (Homa Bay 40km)</h3>
+            <p class="text-xs text-slate-500">Open orders ready for immediate acceptance by certified couriers</p>
+          </div>
+          <span id="rider-radar-count" class="text-xs font-bold bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
+            0 Dispatches Near You
+          </span>
+        </div>
+
+        <div id="rider-radar-list" class="space-y-3"></div>
+      </div>
+
+    </div>
+
+    <div id="portal-admin" class="portal-container hidden space-y-6">
+      
+      <!-- Metrics Overview -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-bold uppercase text-slate-400">Total Registered Users</div>
+          <div id="admin-stat-total-users" class="text-2xl font-extrabold text-slate-900 font-display mt-1">5 Accounts</div>
+          <div id="admin-stat-user-breakdown" class="text-[10px] text-slate-500 mt-1">3 Customers • 2 Couriers</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-bold uppercase text-slate-400">Riders Online / Active</div>
+          <div id="admin-stat-active-riders" class="text-2xl font-extrabold text-amber-500 font-display mt-1">0 Active</div>
+          <div id="admin-stat-online-riders" class="text-[10px] text-emerald-600 font-semibold mt-1"><i class="fa-solid fa-motorcycle mr-1"></i> Live in 40km Geofence</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-bold uppercase text-slate-400">Gross Platform Volume</div>
+          <div id="admin-stat-gpv" class="text-2xl font-extrabold text-slate-900 font-display mt-1">KES 0</div>
+          <div id="admin-stat-orders" class="text-[10px] text-emerald-600 font-semibold mt-1"><i class="fa-solid fa-arrow-trend-up mr-1"></i> Delivered orders</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-bold uppercase text-slate-400">Kenya ODPC Status</div>
+          <div class="text-2xl font-extrabold text-brand-600 font-display mt-1">Compliant</div>
+          <div class="text-[10px] text-slate-500 mt-1">Data Protection Act 2019 Active</div>
+        </div>
+      </div>
+
+      <!-- LIVE ORDERS -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div>
+          <h3 class="font-bold text-base text-slate-900">Live Dispatch Ledger</h3>
+          <p class="text-xs text-slate-500">Most recent orders across Homa Bay, updated in real time</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-y border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Order</th>
+                <th class="py-3 px-4">Service</th>
+                <th class="py-3 px-4">Customer</th>
+                <th class="py-3 px-4">Courier</th>
+                <th class="py-3 px-4">Payment</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody id="admin-orders-table-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- COURIER VETTING & NTSA COMPLIANCE CONSOLE -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-base text-slate-900">Courier Vetting & NTSA Compliance Desk</h3>
+              <span id="pending-vetting-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">1 Rider Pending Vetting</span>
+            </div>
+            <p class="text-xs text-slate-500">Inspect National ID credentials, NTSA bodaboda plates, and issue dispatch authorizations</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-y border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Courier Name</th>
+                <th class="py-3 px-4">National ID</th>
+                <th class="py-3 px-4">NTSA Motorbike Plate</th>
+                <th class="py-3 px-4">Driving License #</th>
+                <th class="py-3 px-4">Vetting Status</th>
+                <th class="py-3 px-4 text-right">Approval Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-vetting-table-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- REGISTERED USERS DIRECTORY & RIGHT TO ERASURE LOG -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-base text-slate-900">User Directory & Data Subject Rights</h3>
+              <span id="user-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-50 text-brand-700 border border-brand-200">5 Users Total</span>
+            </div>
+            <p class="text-xs text-slate-500">Legal names, normalized +254 phone records, and administrative account deletion</p>
+          </div>
+          <input type="text" id="admin-user-search" oninput="app.filterUserDirectory()" placeholder="Search name or +254 phone..." class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-y border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Legal Name</th>
+                <th class="py-3 px-4">Phone (+254)</th>
+                <th class="py-3 px-4">Email</th>
+                <th class="py-3 px-4">Role</th>
+                <th class="py-3 px-4">ODPC Consent</th>
+                <th class="py-3 px-4 text-right">Administrative Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+
+        <!-- Right to Erasure Audit Trail -->
+        <div class="pt-4 border-t border-slate-100">
+          <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Right to Erasure (ODPC Section 40) Audit Trail</h4>
+          <div id="admin-erasure-logs" class="space-y-1 text-[11px] font-mono text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200 max-h-32 overflow-y-auto">
+            <div class="text-slate-400">No erasure requests recorded yet.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- AUTHENTICATION & SIGN UP MODAL -->
+  <div id="modal-auth" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto">
+      <button onclick="app.closeAuthModal()" class="absolute right-5 top-5 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+          <i class="fa-solid fa-user-shield"></i>
+        </div>
+        <h3 id="auth-modal-title" class="text-xl font-display font-bold text-slate-900">GDrop Access & Security</h3>
+        <p id="auth-modal-desc" class="text-xs text-slate-500 mt-1">Authenticate to manage your Homa Bay dispatches.</p>
+      </div>
+
+      <!-- Auth Switcher -->
+      <div class="flex bg-slate-100 p-1 rounded-2xl mb-5 text-xs font-semibold">
+        <button id="auth-tab-login" onclick="app.toggleAuthMode('login')" class="flex-1 py-2 rounded-xl bg-white text-slate-900 shadow-sm transition">Sign In</button>
+        <button id="auth-tab-signup" onclick="app.toggleAuthMode('signup')" class="flex-1 py-2 rounded-xl text-slate-600 hover:text-slate-900 transition">Register Account</button>
+      </div>
+
+      <!-- Form -->
+      <form id="auth-form" onsubmit="app.handleAuthSubmit(event)" class="space-y-4">
+        
+        <!-- Legal Name -->
+        <div id="field-signup-name" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            Legal Full Name <span class="text-rose-500">*</span> <span class="text-[10px] text-slate-400 font-normal">(At least 2 names as on National ID)</span>
+          </label>
+          <input type="text" id="auth-fullname" value="" placeholder="e.g. Jared Odhiambo" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- Email -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Email Address <span class="text-rose-500">*</span></label>
+          <input type="email" id="auth-email" required value="" placeholder="e.g. name@gdrop.co.ke" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- Phone (Kenyan 10 digits to +254) -->
+        <div id="field-signup-phone" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            Kenyan Phone Number <span class="text-rose-500">*</span> <span class="text-[10px] text-slate-400 font-normal">(10 digits starting with 07 or 01)</span>
+          </label>
+          <input type="tel" id="auth-phone" maxlength="10" value="" placeholder="e.g. 0712345678" oninput="app.liveValidatePhone(this)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+          <p id="phone-normalized-preview" class="text-[11px] text-slate-500 mt-1">Normalized to: <strong class="text-brand-700 font-mono">+254...</strong></p>
+        </div>
+
+        <!-- COURIER VETTING EXTRA FIELDS -->
+        <div id="field-courier-vetting-group" class="hidden space-y-3 p-3.5 bg-amber-50 rounded-2xl border border-amber-200">
+          <div class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-motorcycle text-amber-600"></i> Courier Verification Credentials (NTSA)
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 mb-0.5">National ID Number <span class="text-rose-500">*</span></label>
+            <input type="text" id="auth-national-id" value="" placeholder="e.g. 31902844" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 mb-0.5">NTSA Bodaboda Number Plate <span class="text-rose-500">*</span></label>
+            <input type="text" id="auth-motorbike-plate" value="" placeholder="e.g. KMDF 123X" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs uppercase">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Driving License Number <span class="text-rose-500">*</span></label>
+            <input type="text" id="auth-license-no" value="" placeholder="e.g. DL-HB-7721" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs">
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            Password <span class="text-rose-500">*</span> <span class="text-[10px] text-slate-400 font-normal">(Min 8 chars, letters & numbers)</span>
+          </label>
+          <input type="password" id="auth-password" required value="" placeholder="e.g. SecretPassword123" oninput="app.liveValidatePassword()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+          <div id="password-strength-pill" class="hidden text-[10px] font-bold mt-1"></div>
+        </div>
+
+        <!-- Password Match -->
+        <div id="field-signup-confirm-pwd" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Confirm Password <span class="text-rose-500">*</span></label>
+          <input type="password" id="auth-password-confirm" value="" placeholder="Repeat your password" oninput="app.liveValidatePasswordMatch()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+          <p id="password-match-msg" class="hidden text-[11px] mt-1 font-semibold"></p>
+        </div>
+
+        <!-- Role -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Platform Role</label>
+          <select id="auth-role" onchange="app.handleRoleChangeInAuth(this)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
+            <option value="customer">Customer (Homa Bay Client)</option>
+            <option value="rider">GDrop Courier / Rider (Requires Vetting)</option>
+            <option value="admin">System Operations Administrator</option>
+          </select>
+        </div>
+
+        <!-- KENYA ODPC COMPLIANCE CHECKBOX -->
+        <div id="field-signup-odpc" class="hidden items-start gap-2 pt-1">
+          <input type="checkbox" id="auth-odpc-consent" class="mt-0.5 rounded text-brand-600 focus:ring-brand-500">
+          <label for="auth-odpc-consent" class="text-[11px] text-slate-600 leading-snug">
+            I agree to the processing of my National ID, phone number, and location telemetry under the <strong>Kenya Data Protection Act 2019</strong>.
+          </label>
+        </div>
+
+        <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition">
+          Sign In to GDrop
+        </button>
+        <div id="auth-demo-accounts" class="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+          <div class="font-bold text-slate-700">Demo accounts (tap to fill)</div>
+          <button type="button" onclick="app.fillDemo('george@gdrop.co.ke','Password123')" class="block hover:text-brand-700 underline">Customer: george@gdrop.co.ke / Password123</button>
+          <button type="button" onclick="app.fillDemo('jared@gdrop.co.ke','RiderPass1')" class="block hover:text-brand-700 underline">Courier: jared@gdrop.co.ke / RiderPass1</button>
+          <button type="button" onclick="app.fillDemo('admin@gdrop.co.ke','AdminPass2026')" class="block hover:text-brand-700 underline">Admin: admin@gdrop.co.ke / AdminPass2026</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- RECEIPT ZOOM MODAL -->
+  <div id="modal-receipt-zoom" class="hidden fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative space-y-4">
+      <button onclick="app.closeReceiptZoomModal()" class="absolute right-5 top-5 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-receipt text-brand-600 text-lg"></i>
+        <h3 class="font-display font-bold text-slate-900 text-base">Store Till Slip Verification</h3>
+      </div>
+      <div class="w-full h-80 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center">
+        <img id="zoom-receipt-img" src="" alt="Till Receipt Preview" class="w-full h-full object-contain">
+      </div>
+      <div class="flex justify-between items-center text-xs text-slate-500 px-1">
+        <span>Uploaded by Courier: <strong id="zoom-receipt-rider">—</strong></span>
+        <span>Receipt Total: <strong id="zoom-receipt-amount" class="text-emerald-600">—</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHOPPING VARIANCE RE-AUTHORIZATION MODAL (>10%) -->
+  <div id="modal-variance" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4">
+      <div class="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-2xl font-bold">
+        <i class="fa-solid fa-scale-unbalanced"></i>
+      </div>
+      <div>
+        <h3 class="font-display font-bold text-lg text-slate-900">Price Variance Exceeds 10%</h3>
+        <p class="text-xs text-slate-500 mt-1">In-store merchant prices in Homa Bay exceeded your estimated budget threshold.</p>
+      </div>
+
+      <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-2 text-left">
+        <div class="flex justify-between"><span class="text-slate-500">Estimated Budget:</span> <span id="modal-variance-est" class="font-bold text-slate-800">KES 1,010.00</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Actual Till Receipt:</span> <span id="modal-variance-actual" class="font-bold text-rose-600">KES 1,180.00</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Variance Delta:</span> <span id="modal-variance-percent" class="font-bold text-rose-600">+16.8% (Exceeds 10%)</span></div>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-snug">
+        Do you authorize GDrop to adjust your platform escrow to cover the actual till balance?
+      </p>
+
+      <div class="space-y-2 pt-2">
+        <button onclick="app.approvePriceVariance()" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs transition">
+          Authorize Difference & Continue Dispatch
+        </button>
+        <button onclick="app.rejectPriceVariance()" class="w-full py-2.5 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-slate-50 transition">
+          Decline & Restrict to Estimated Budget
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCOUNT MANAGEMENT & RIGHT TO ERASURE MODAL -->
+  <div id="modal-account" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative">
+      <button onclick="app.closeAccountModal()" class="absolute right-5 top-5 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+
+      <div class="flex items-center space-x-3 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg">
+          <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <div>
+          <h3 class="font-display font-bold text-lg text-slate-900">Account Management</h3>
+          <p class="text-xs text-slate-500">Manage credentials & Kenya ODPC rights</p>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs mb-6">
+        <div class="flex justify-between"><span class="text-slate-500">Legal Name:</span> <strong id="acc-details-name" class="text-slate-800">Otieno George</strong></div>
+        <div class="flex justify-between"><span class="text-slate-500">Standardized Phone:</span> <strong id="acc-details-phone" class="text-slate-800 font-mono">+254712345678</strong></div>
+        <div class="flex justify-between"><span class="text-slate-500">Email Address:</span> <strong id="acc-details-email" class="text-slate-800">george@gdrop.co.ke</strong></div>
+        <div class="flex justify-between"><span class="text-slate-500">Role Status:</span> <span id="acc-details-role" class="px-2 py-0.5 rounded font-bold text-[10px] bg-brand-100 text-brand-800 uppercase">Customer</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">ODPC Consent:</span> <span class="text-emerald-700 font-bold"><i class="fa-solid fa-check"></i> Granted (2019 Act)</span></div>
+      </div>
+
+      <!-- Danger Zone / Right to Erasure -->
+      <div class="border-t border-slate-200 pt-5 space-y-3">
+        <div class="flex items-center gap-2 text-rose-600 font-bold text-xs uppercase tracking-wider">
+          <i class="fa-solid fa-trash-can"></i> Right to Erasure (ODPC Section 40)
+        </div>
+        <p class="text-[11px] text-slate-500 leading-relaxed">
+          Exercising your statutory right to deletion will permanently erase your identification, credentials, order histories, and telemetry logs.
+        </p>
+
+        <button onclick="app.customerSelfDeleteAccount()" class="w-full py-3 px-4 rounded-xl border-2 border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-user-xmark"></i> Permanently Delete My Account & Telemetry
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- IN-PAGE CONFIRMATION DIALOG -->
+  <div id="modal-confirm" class="hidden fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+      <h3 id="confirm-title" class="font-display font-bold text-lg text-slate-900">Are you sure?</h3>
+      <p id="confirm-message" class="text-xs text-slate-600 leading-relaxed"></p>
+      <div class="flex gap-2 pt-1">
+        <button id="confirm-cancel" class="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">Go back</button>
+        <button id="confirm-ok" class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SMS OTP VERIFICATION MODAL -->
+  <div id="modal-otp" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+      <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl font-bold">
+        <i class="fa-solid fa-comment-sms"></i>
+      </div>
+      <div>
+        <h3 class="font-display font-bold text-lg text-slate-900">SMS Verification</h3>
+        <p class="text-xs text-slate-500 mt-1">We sent a 6-digit verification code to <span id="otp-phone-display" class="font-bold text-slate-800"></span></p>
+      </div>
+
+      <div class="flex justify-center gap-2 py-2">
+        <input type="text" inputmode="numeric" maxlength="6" id="otp-input" value="" placeholder="------" class="w-40 text-center tracking-[0.5em] text-lg font-black px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500">
+      </div>
+
+      <p id="otp-demo-hint" class="hidden text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2"></p>
+
+      <button id="otp-submit-btn" onclick="app.verifyOtpCode()" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs transition">
+        Validate & Complete Registration
+      </button>
+    </div>
+  </div>
+
+  <!-- M-PESA STK PUSH INTERACTION MODAL -->
+  <div id="modal-mpesa" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-5">
+      <div class="w-14 h-14 rounded-2xl bg-mpesa-light text-mpesa flex items-center justify-center mx-auto text-2xl font-bold shadow-sm">
+        <i class="fa-solid fa-mobile-screen-button"></i>
+      </div>
+      
+      <div>
+        <span class="text-[10px] uppercase font-bold text-mpesa tracking-wider">Safaricom Daraja API • Homa Bay</span>
+        <h3 class="font-display font-bold text-lg text-slate-900 mt-0.5">M-Pesa STK Push Initiated</h3>
+        <p class="text-xs text-slate-500 mt-1">Enter your M-Pesa PIN on the handset dialog to authorize payment.</p>
+      </div>
+
+      <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2 text-left">
+        <div class="flex justify-between"><span class="text-slate-500">Paybill Business:</span><span id="mpesa-modal-shortcode" class="font-bold text-slate-800">400200 (GDrop Kenya)</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Account Ref:</span><span id="mpesa-modal-ref" class="font-bold text-slate-800">GDROP-0000</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Amount Due:</span><span id="mpesa-modal-amount" class="font-bold text-mpesa text-sm">KES 563.00</span></div>
+      </div>
+
+      <div id="mpesa-modal-prompt" class="bg-slate-900 text-white p-3 rounded-xl text-left text-[11px] font-mono border border-slate-700 animate-pulse">
+        Do you want to pay KES 0.00 to GDROP CONCIERGE HOMA BAY? Enter PIN: ****
+      </div>
+      <p id="mpesa-modal-status" class="text-[11px] text-slate-500"></p>
+
+      <div class="space-y-2">
+        <button id="mpesa-sim-btn" onclick="app.confirmMpesaSuccess()" class="w-full py-3 rounded-xl bg-mpesa hover:bg-mpesa-dark text-white font-bold text-xs transition shadow-lg shadow-mpesa/20">
+          <i class="fa-solid fa-check mr-1.5"></i> Simulate PIN Entered & Cleared
+        </button>
+        <button onclick="app.cancelMpesaPrompt()" class="w-full py-2 text-slate-400 hover:text-slate-600 text-xs font-semibold">
+          <span id="mpesa-dismiss-label">Dismiss / Abort Transaction</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =================================================================
+     * GDrop client — talks to the GDrop API (Express + SQLite)
+     * ================================================================= */
+    const API_BASE = (() => {
+      const raw = window.__API_BASE__ || '';
+      const local = new Set(['localhost', '127.0.0.1', '[::1]', '']);
+      if (raw.startsWith('__PORT_')) {
+        if (!local.has(location.hostname)) console.error('GDrop: backend proxy placeholder was not rewritten');
+        return ''; // same-origin (served by the GDrop server itself)
+      }
+      return raw.replace(/\/$/, '');
+    })();
+
+    // Storage is blocked inside some sandboxed previews — degrade to memory.
+    const safeStore = {
+      mem: {},
+      get(k) { return this.mem[k] ?? null; },
+      set(k, v) { this.mem[k] = v; },
+      del(k) { delete this.mem[k]; },
+    };
+
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const kes = (n) => `KES ${Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const initials = (name) => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('') || '--';
+    const fmtTime = (ms) => new Date(ms).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(',', '') + ' EAT';
+
+    class ApiError extends Error {
+      constructor(status, message, code) { super(message); this.status = status; this.code = code; }
+    }
+
+    const ACTIVE_STATUSES = ['pending_payment', 'placed', 'assigned', 'at_store', 'in_transit'];
+    const STATUS_META = {
+      pending_payment: { step: 1, bar: '15%', label: 'Awaiting M-Pesa Payment', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+      placed:          { step: 1, bar: '20%', label: 'Finding a Courier',       cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+      assigned:        { step: 2, bar: '40%', label: 'Courier Assigned',        cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+      at_store:        { step: 3, bar: '65%', label: 'Procuring at Store',      cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+      in_transit:      { step: 4, bar: '85%', label: 'In Transit',              cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+      delivered:       { step: 5, bar: '100%', label: 'Delivered (POD Confirmed)', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+      cancelled:       { step: 0, bar: '0%', label: 'Cancelled',                 cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+    };
+    const PAYMENT_LABEL = {
+      PENDING: 'M-Pesa prompt sent — awaiting PIN',
+      PAID: 'M-Pesa paid',
+      FAILED: 'M-Pesa payment not completed',
+      DUE_ON_DELIVERY: 'Pay on delivery (GDrop Till)',
+      COLLECT_ON_TILL: 'Settle on GDrop Till',
+    };
+
+    class GDropApp {
+      constructor() {
+        this.token = null;
+        this.currentUser = null;
+        this.config = null;
+
+        this.serviceType = 'courier';
+        this.courierDirection = 'send';
+        this.baseFare = 150.0;
+        this.ratePerKm = 35.0;
+        this.minimumFare = 250.0;
+        this.shoppingCommissionRate = 0.08;
+        this.multiStopFeePerStop = 120.0;
+        this.cancellationFee = 100.0;
+        this.weightSurcharges = { light: 0, medium: 60, heavy: 140 };
+        this.podUnlockAfter = 3;
+        this.varianceThresholdPct = 10;
+
+        this.HOMA_BAY_CENTER = { lat: -0.5273, lng: 34.4571, name: 'Homa Bay Town Posta Hub' };
+        this.MAX_RADIUS_KM = 40.0;
+
+        this.estimatedDistanceKm = 11.8;
+        this.shoppingGoodsEstimatedSubtotal = 0.0;
+        this.selectedTip = 0.0;
+        this.weightSurcharge = 0.0;
+        this.extraStopsCount = 0;
+        this.currentQuoteTotal = 0;
+
+        // Server-backed state
+        this.customerOrders = [];
+        this.activeOrder = null;
+        this.riderDash = null;
+        this.adminData = null;
+        this.pendingOtp = null;
+        this.pendingPayment = null;
+        this.paymentPoll = null;
+        this.lastVariancePrompt = null;
+        this.uploadedReceiptDataUrl = '';
+
+        this.isGpsStreaming = false;
+        this.watchPositionId = null;
+        this.lastGpsSent = 0;
+
+        this.events = null;
+        this.refreshTimers = {};
+        this.pollTimer = null;
+        this.lastActivity = Date.now();
+        this.activeView = 'customer';
+
+        this.map = null;
+        this.geofenceCircle = null;
+        this.originMarker = null;
+        this.destMarker = null;
+        this.riderMarker = null;
+        this.routePolyline = null;
+        this.coords = { origin: [-0.5273, 34.4571], destination: [-0.5847, 34.5028], courier: [-0.5400, 34.4690] };
+
+        this.activeAuthMode = 'login';
+      }
+
+      /* -------------------------------------------------------------
+       * API
+       * ----------------------------------------------------------- */
+      async api(method, path, body) {
+        const headers = { Accept: 'application/json' };
+        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        if (this.token) headers.Authorization = `Bearer ${this.token}`;
+        let res;
+        try {
+          res = await fetch(`${API_BASE}${path}`, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+        } catch (e) {
+          throw new ApiError(0, 'Cannot reach the GDrop server. Check your connection and try again.', 'NETWORK');
+        }
+        let data = {};
+        try { data = await res.json(); } catch (e) { /* empty body */ }
+        if (!res.ok) {
+          const err = new ApiError(res.status, data.error || `Request failed (${res.status})`, data.code);
+          if (res.status === 401 && this.token && path !== '/api/auth/logout') this.handleSessionLost(err);
+          throw err;
+        }
+        return data;
+      }
+
+      handleSessionLost(err) {
+        const wasSignedIn = !!this.currentUser;
+        this.clearSession();
+        if (wasSignedIn) {
+          this.showToast(err.code === 'SESSION_EXPIRED' ? 'Session Expired' : 'Signed Out', err.message, 'info');
+          this.openAuthModal('login');
+        }
+      }
+
+      async init() {
+        this.initMap();
+        this.initActivityTracking();
+        this.updateCourierDirectionUI();
+        this.updatePaymentEligibilityUI();
+        this.updateFareQuote();
+        this.renderCustomerTracker();
+        this.renderRiderPortal();
+        this.updateUserSessionUI();
+
+        try {
+          this.config = await this.api('GET', '/api/config');
+          this.applyConfig(this.config);
+        } catch (e) {
+          this.showToast('Server Unavailable', e.message, 'error');
+        }
+
+        const saved = safeStore.get('gdrop_token');
+        if (saved) {
+          this.token = saved;
+          try {
+            const { user } = await this.api('GET', '/api/me');
+            await this.onSignedIn(user, { silent: true, restoreView: safeStore.get('gdrop_active_view') });
+          } catch (e) {
+            this.clearSession();
+          }
+        }
+      }
+
+      applyConfig(cfg) {
+        const t = cfg.tariff;
+        this.baseFare = t.baseFare; this.ratePerKm = t.ratePerKm; this.minimumFare = t.minimumFare;
+        this.shoppingCommissionRate = t.shoppingCommissionRate; this.multiStopFeePerStop = t.multiStopFeePerStop;
+        this.cancellationFee = t.cancellationFee; this.weightSurcharges = t.weightSurcharge;
+        this.podUnlockAfter = t.podUnlockAfter; this.varianceThresholdPct = t.varianceThresholdPct;
+        this.MAX_RADIUS_KM = cfg.maxRadiusKm;
+        const online = document.getElementById('map-riders-online-txt');
+        if (online && cfg.live) online.innerText = `${cfg.live.onlineCouriers} rider${cfg.live.onlineCouriers === 1 ? '' : 's'} online • ${cfg.live.openJobs} open job${cfg.live.openJobs === 1 ? '' : 's'}`;
+        const sc = document.getElementById('mpesa-modal-shortcode');
+        if (sc) sc.innerText = `${cfg.mpesa.shortcode} (GDrop Kenya)`;
+        this.updateFareQuote();
+      }
+
+      /* -------------------------------------------------------------
+       * SESSION
+       * ----------------------------------------------------------- */
+      initActivityTracking() {
+        const mark = () => { this.lastActivity = Date.now(); };
+        ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach((evt) => window.addEventListener(evt, mark, { passive: true }));
+        // After 5 idle minutes, return to the customer view. The server ends the session after 20.
+        setInterval(() => {
+          if (Date.now() - this.lastActivity >= 5 * 60 * 1000 && this.activeView !== 'customer') this.setPortalView('customer');
+        }, 30000);
+      }
+
+      async onSignedIn(user, opts = {}) {
+        this.currentUser = user;
+        safeStore.set('gdrop_token', this.token);
+        this.updateUserSessionUI();
+        this.connectEvents();
+        this.startPolling();
+        const view = opts.restoreView && this.canView(opts.restoreView) ? opts.restoreView : user.role;
+        this.setPortalView(view);
+        await this.refreshAll();
+        if (!opts.silent) this.showToast('Signed In Successfully', `Welcome back, ${user.name}.`, 'success');
+      }
+
+      clearSession() {
+        this.token = null;
+        this.currentUser = null;
+        safeStore.del('gdrop_token');
+        if (this.events) { this.events.close(); this.events = null; }
+        if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+        if (this.isGpsStreaming) this.toggleGpsStreaming(true);
+        this.customerOrders = []; this.activeOrder = null; this.riderDash = null; this.adminData = null;
+        this.updateUserSessionUI();
+        this.renderCustomerTracker();
+        this.renderRiderPortal();
+        this.setPortalView('customer');
+      }
+
+      canView(view) {
+        if (view === 'customer') return true;
+        if (!this.currentUser) return false;
+        return this.currentUser.role === (view === 'rider' ? 'rider' : 'admin');
+      }
+
+      async refreshAll() {
+        if (!this.currentUser) return;
+        const role = this.currentUser.role;
+        const jobs = [];
+        if (role === 'customer') jobs.push(this.loadCustomerOrders());
+        if (role === 'rider') jobs.push(this.loadRiderDashboard());
+        if (role === 'admin') jobs.push(this.loadAdmin());
+        await Promise.allSettled(jobs);
+      }
+
+      scheduleRefresh(key, fn, delay = 250) {
+        clearTimeout(this.refreshTimers[key]);
+        this.refreshTimers[key] = setTimeout(fn, delay);
+      }
+
+      connectEvents() {
+        if (this.events) this.events.close();
+        if (!this.token || typeof EventSource === 'undefined') return;
+        const es = new EventSource(`${API_BASE}/api/events?token=${encodeURIComponent(this.token)}`);
+        this.events = es;
+        const role = () => this.currentUser && this.currentUser.role;
+        es.addEventListener('order', () => {
+          if (role() === 'customer') this.scheduleRefresh('cust', () => this.loadCustomerOrders());
+          if (role() === 'rider') this.scheduleRefresh('rider', () => this.loadRiderDashboard());
+        });
+        es.addEventListener('radar', () => { if (role() === 'rider') this.scheduleRefresh('rider', () => this.loadRiderDashboard()); });
+        es.addEventListener('admin', () => { if (role() === 'admin') this.scheduleRefresh('admin', () => this.loadAdmin(), 400); });
+        es.addEventListener('me', () => this.scheduleRefresh('me', () => this.reloadMe()));
+        es.addEventListener('location', (ev) => {
+          try {
+            const d = JSON.parse(ev.data);
+            if (this.activeOrder && d.orderId === this.activeOrder.id) {
+              this.activeOrder.riderLocation = { lat: d.lat, lng: d.lng };
+              this.placeRiderMarker(d.lat, d.lng, true);
+            }
+          } catch (e) { /* ignore */ }
+        });
+        es.addEventListener('session', () => {
+          this.clearSession();
+          this.showToast('Account Removed', 'This account has been erased under the ODPC Right to Erasure.', 'error');
+        });
+      }
+
+      // Safety net for networks or previews where the live stream is interrupted
+      startPolling() {
+        if (this.pollTimer) clearInterval(this.pollTimer);
+        this.pollTimer = setInterval(() => { if (this.currentUser && document.visibilityState !== 'hidden') this.refreshAll(); }, 15000);
+      }
+
+      async reloadMe() {
+        if (!this.token) return;
+        try {
+          const { user } = await this.api('GET', '/api/me');
+          this.currentUser = user;
+          this.updateUserSessionUI();
+          if (user.role === 'rider') this.loadRiderDashboard();
+        } catch (e) { /* handled */ }
+      }
+
+      /* -------------------------------------------------------------
+       * PSEUDO-TEXT PLACEHOLDER & AUTO-LOCATION STYLING ENGINE
+       * ----------------------------------------------------------- */
+      setAutoLocationStyling(element, isAutoLocated) {
+        if (!element) return;
+        if (isAutoLocated && element.value.trim() !== '') element.classList.add('auto-located');
+        else element.classList.remove('auto-located');
+      }
+
+      handleManualLocationInput(element) {
+        this.setAutoLocationStyling(element, false);
+      }
+
+      /* -------------------------------------------------------------
+       * IN-PAGE CONFIRM (native dialogs are blocked in some previews)
+       * ----------------------------------------------------------- */
+      confirmDialog(title, message, okLabel = 'Confirm') {
+        return new Promise((resolve) => {
+          const modal = document.getElementById('modal-confirm');
+          document.getElementById('confirm-title').innerText = title;
+          document.getElementById('confirm-message').innerText = message;
+          const ok = document.getElementById('confirm-ok');
+          const cancel = document.getElementById('confirm-cancel');
+          ok.innerText = okLabel;
+          const close = (val) => { modal.classList.add('hidden'); ok.onclick = null; cancel.onclick = null; resolve(val); };
+          ok.onclick = () => close(true);
+          cancel.onclick = () => close(false);
+          modal.classList.remove('hidden');
+          ok.focus();
+        });
+      }
+
+      setBusy(btn, busy, label) {
+        if (!btn) return;
+        if (busy) { btn.dataset.label = btn.innerHTML; btn.disabled = true; btn.classList.add('opacity-60', 'cursor-wait'); if (label) btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>${label}`; }
+        else { btn.disabled = false; btn.classList.remove('opacity-60', 'cursor-wait'); if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
+      }
+
+      /* -------------------------------------------------------------
+       * PROOF OF DELIVERY (POD)
+       * ----------------------------------------------------------- */
+      async verifyAndCompleteDelivery() {
+        const job = this.riderDash && this.riderDash.active;
+        if (!job) return this.showToast('No Active Job', 'Accept a dispatch before confirming delivery.', 'info');
+        const pin = document.getElementById('rider-pod-input').value.trim();
+        if (!/^\d{4}$/.test(pin)) return this.showToast('Enter the PIN', "Ask the recipient for their 4-digit handover PIN.", 'error');
+        try {
+          await this.api('POST', `/api/orders/${job.id}/deliver`, { pin });
+          document.getElementById('rider-pod-input').value = '';
+          this.showToast('Proof of Delivery Verified', `${job.id} delivered. ${kes(job.riderPayout)} added to today's payout.`, 'success');
+          await this.loadRiderDashboard();
+        } catch (e) {
+          this.showToast('Invalid Handover PIN', e.message, 'error');
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * STORE RECEIPT CAPTURE & PRICE VARIANCE
+       * ----------------------------------------------------------- */
+      compressImage(file, maxDim = 1400, quality = 0.8) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error('Could not read the photo.'));
+          reader.onload = () => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('That file is not a supported image.'));
+            img.onload = () => {
+              const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
+              canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+              try { resolve(canvas.toDataURL('image/jpeg', quality)); } catch (e) { resolve(reader.result); }
+            };
+            img.src = reader.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async handleRiderReceiptUpload(input) {
+        const job = this.riderDash && this.riderDash.active;
+        if (!input.files || !input.files[0] || !job) return;
+        const file = input.files[0];
+        const status = document.getElementById('receipt-status-text');
+        status.innerText = 'Uploading receipt...';
+        status.className = 'font-bold text-slate-300 text-xs';
+        try {
+          const image = await this.compressImage(file);
+          const rawAmt = document.getElementById('rider-actual-receipt-val').value;
+          const body = { image };
+          if (rawAmt !== '') body.amount = parseFloat(rawAmt);
+          await this.api('POST', `/api/orders/${job.id}/receipt`, body);
+          this.uploadedReceiptDataUrl = image;
+          const img = document.getElementById('receipt-preview-img');
+          img.src = image; img.classList.remove('hidden');
+          document.getElementById('receipt-placeholder-icon').classList.add('hidden');
+          document.getElementById('btn-zoom-receipt').classList.remove('hidden');
+          status.innerText = `${file.name.substring(0, 16)}... (Attached)`;
+          status.className = 'font-bold text-emerald-400 text-xs';
+          this.showToast('Receipt Captured', 'Store receipt shared with the customer.', 'success');
+          await this.loadRiderDashboard();
+        } catch (e) {
+          status.innerText = 'Upload failed — try again';
+          status.className = 'font-bold text-rose-400 text-xs';
+          this.showToast('Receipt Upload Failed', e.message, 'error');
+        } finally {
+          input.value = '';
+        }
+      }
+
+      async submitReceiptAmount() {
+        const job = this.riderDash && this.riderDash.active;
+        const raw = document.getElementById('rider-actual-receipt-val').value;
+        if (!job || job.serviceType !== 'shopping' || raw === '') return;
+        if (job.receiptAmount != null && parseFloat(raw) === job.receiptAmount) return;
+        try {
+          const { order } = await this.api('POST', `/api/orders/${job.id}/receipt`, { amount: parseFloat(raw) });
+          this.riderDash.active = order;
+          this.renderRiderActiveJob();
+          if (order.varianceStatus === 'PENDING') this.showToast('Customer Approval Needed', 'The receipt is more than 10% over budget. The customer has been asked to approve.', 'info');
+        } catch (e) {
+          this.showToast('Could Not Save Amount', e.message, 'error');
+        }
+      }
+
+      async previewCustomerReceipt() {
+        const order = this.activeView === 'rider' ? (this.riderDash && this.riderDash.active) : this.activeOrder;
+        const img = document.getElementById('zoom-receipt-img');
+        if (order && order.hasReceipt) {
+          try {
+            const r = await this.api('GET', `/api/orders/${order.id}/receipt`);
+            img.src = r.image || '';
+            document.getElementById('zoom-receipt-amount').innerText = r.amount != null ? kes(r.amount) : 'Not entered';
+          } catch (e) { return this.showToast('Receipt Unavailable', e.message, 'error'); }
+        } else if (this.uploadedReceiptDataUrl) {
+          img.src = this.uploadedReceiptDataUrl;
+        } else {
+          return this.showToast('No Receipt Yet', 'The courier has not uploaded a till receipt yet.', 'info');
+        }
+        document.getElementById('zoom-receipt-rider').innerText = (order && order.rider && order.rider.name) || (this.currentUser && this.currentUser.name) || '—';
+        document.getElementById('modal-receipt-zoom').classList.remove('hidden');
+      }
+
+      closeReceiptZoomModal() {
+        document.getElementById('modal-receipt-zoom').classList.add('hidden');
+      }
+
+      // Courier-side live indicator while typing the till amount
+      evaluatePriceVariance() {
+        const pill = document.getElementById('variance-status-pill');
+        const warning = document.getElementById('variance-warning-msg');
+        if (!pill) return;
+        const job = this.riderDash && this.riderDash.active;
+        const estimatedBudget = (job && job.goodsEstimate) || 0;
+        const rawInput = document.getElementById('rider-actual-receipt-val')?.value;
+        if (!rawInput || rawInput.trim() === '' || !estimatedBudget) {
+          pill.className = 'text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 border border-slate-700';
+          pill.innerText = 'Awaiting receipt total entry';
+          warning.classList.add('hidden');
+          return;
+        }
+        const pct = ((parseFloat(rawInput) - estimatedBudget) / estimatedBudget) * 100;
+        if (pct > this.varianceThresholdPct) {
+          pill.className = 'text-xs font-semibold px-3 py-1.5 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30';
+          const st = job.varianceStatus;
+          pill.innerText = `Variance: +${pct.toFixed(1)}% — ${st === 'APPROVED' ? 'approved by customer' : st === 'REJECTED' ? 'declined by customer' : 'needs customer approval'}`;
+          warning.classList.toggle('hidden', st === 'APPROVED');
+        } else {
+          pill.className = 'text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          pill.innerText = `Variance: ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% (Within allowable ${this.varianceThresholdPct}%)`;
+          warning.classList.add('hidden');
+        }
+      }
+
+      // Customer-side approval prompt
+      maybePromptVariance(order) {
+        if (!order || order.varianceStatus !== 'PENDING') return;
+        const key = `${order.id}:${order.receiptAmount}`;
+        if (this.lastVariancePrompt === key) return;
+        this.lastVariancePrompt = key;
+        const est = order.goodsEstimate || 0;
+        const pct = est ? ((order.receiptAmount - est) / est) * 100 : 0;
+        document.getElementById('modal-variance-est').innerText = kes(est);
+        document.getElementById('modal-variance-actual').innerText = kes(order.receiptAmount);
+        document.getElementById('modal-variance-percent').innerText = `+${pct.toFixed(1)}% (Threshold: ${this.varianceThresholdPct}%)`;
+        document.getElementById('modal-variance').classList.remove('hidden');
+      }
+
+      async decideVariance(decision) {
+        document.getElementById('modal-variance').classList.add('hidden');
+        if (!this.activeOrder) return;
+        try {
+          await this.api('POST', `/api/orders/${this.activeOrder.id}/variance`, { decision });
+          if (decision === 'approve') this.showToast('Variance Authorized', 'You approved the price change. Your courier can proceed.', 'success');
+          else this.showToast('Variance Declined', 'Your courier has been asked to stay within the original budget.', 'info');
+          await this.loadCustomerOrders();
+        } catch (e) {
+          this.showToast('Could Not Save Decision', e.message, 'error');
+        }
+      }
+      approvePriceVariance() { return this.decideVariance('approve'); }
+      rejectPriceVariance() { return this.decideVariance('reject'); }
+
+      /* -------------------------------------------------------------
+       * LIVE GPS TELEMETRY
+       * ----------------------------------------------------------- */
+      toggleGpsStreaming(forceOff = false) {
+        const btn = document.getElementById('btn-stream-gps');
+        const dot = document.getElementById('gps-stream-dot');
+        const label = document.getElementById('gps-stream-label');
+        const stop = () => {
+          this.isGpsStreaming = false;
+          if (this.watchPositionId != null && navigator.geolocation) navigator.geolocation.clearWatch(this.watchPositionId);
+          this.watchPositionId = null;
+          dot.className = 'w-2 h-2 rounded-full bg-slate-400';
+          label.innerText = 'Start Live GPS Telemetry Stream';
+          btn.classList.remove('border', 'border-emerald-500');
+        };
+        if (forceOff === true) return stop();
+
+        if (!this.currentUser || this.currentUser.role !== 'rider') {
+          this.showToast('Courier Sign-In Required', 'Sign in with a courier account to share your location.', 'info');
+          return this.openAuthModal('login');
+        }
+        if (this.isGpsStreaming) {
+          stop();
+          return this.showToast('Telemetry Stopped', 'Live GPS sharing turned off.', 'info');
+        }
+        if (!navigator.geolocation) return this.showToast('GPS Unsupported', 'This device does not support location sharing.', 'error');
+
+        this.isGpsStreaming = true;
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
+        label.innerText = 'Broadcasting Live GPS Telemetry';
+        btn.classList.add('border', 'border-emerald-500');
+        this.watchPositionId = navigator.geolocation.watchPosition(
+          (pos) => this.sendRiderLocation(pos.coords.latitude, pos.coords.longitude),
+          () => this.showToast('GPS Unavailable', 'Location permission was denied or no signal is available.', 'error'),
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+        );
+        this.showToast('Telemetry Active', 'Your location is shared with the customer on your active job.', 'success');
+      }
+
+      async sendRiderLocation(lat, lng) {
+        if (Date.now() - this.lastGpsSent < 4000) return;
+        this.lastGpsSent = Date.now();
+        try { await this.api('POST', '/api/rider/location', { lat, lng }); } catch (e) { /* transient */ }
+      }
+
+      /* -------------------------------------------------------------
+       * ADMIN
+       * ----------------------------------------------------------- */
+      async loadAdmin() {
+        if (!this.currentUser || this.currentUser.role !== 'admin') return;
+        try {
+          this.adminData = await this.api('GET', '/api/admin/overview');
+          this.renderAdmin();
+        } catch (e) {
+          if (e.status !== 401) this.showToast('Admin Data Unavailable', e.message, 'error');
+        }
+      }
+
+      renderAdmin() {
+        const d = this.adminData;
+        if (!d) return;
+        const s = d.stats;
+        document.getElementById('admin-stat-total-users').innerText = `${s.totalUsers} Accounts`;
+        document.getElementById('admin-stat-user-breakdown').innerText = `${s.customers} Customers • ${s.couriers} Couriers`;
+        document.getElementById('admin-stat-active-riders').innerText = `${s.activeRiders} Active`;
+        document.getElementById('admin-stat-online-riders').innerHTML = `<i class="fa-solid fa-motorcycle mr-1"></i> ${s.onlineCouriers} online • ${s.verifiedCouriers} vetted`;
+        document.getElementById('admin-stat-gpv').innerText = `KES ${Math.round(s.deliveredRevenue).toLocaleString('en-KE')}`;
+        const ob = s.ordersByStatus || {};
+        const open = ACTIVE_STATUSES.reduce((n, k) => n + (ob[k] || 0), 0);
+        document.getElementById('admin-stat-orders').innerHTML = `<i class="fa-solid fa-arrow-trend-up mr-1"></i> ${ob.delivered || 0} delivered • ${open} in progress`;
+        this.renderAdminVettingTable();
+        this.renderAdminUserDirectory();
+        this.renderAdminOrders();
+        const logBox = document.getElementById('admin-erasure-logs');
+        logBox.innerHTML = d.erasureLogs.length
+          ? d.erasureLogs.map((l) => `<div>[${esc(fmtTime(l.createdAt))}] ${esc(l.message)}</div>`).join('')
+          : '<div class="text-slate-400">No erasure requests recorded yet.</div>';
+      }
+
+      renderAdminOrders() {
+        const tbody = document.getElementById('admin-orders-table-body');
+        if (!tbody || !this.adminData) return;
+        const rows = this.adminData.recentOrders;
+        if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" class="py-4 px-4 text-center text-slate-400">No orders yet.</td></tr>'; return; }
+        tbody.innerHTML = rows.map((o) => {
+          const m = STATUS_META[o.status] || STATUS_META.placed;
+          return `<tr class="hover:bg-slate-50/80 transition">
+            <td class="py-3 px-4 font-mono font-bold text-slate-900">${esc(o.id)}</td>
+            <td class="py-3 px-4">${o.serviceType === 'shopping' ? 'Shopping' : 'Courier'}</td>
+            <td class="py-3 px-4">${esc(o.customer ? o.customer.name : '—')}</td>
+            <td class="py-3 px-4">${esc(o.rider ? o.rider.name : '—')}</td>
+            <td class="py-3 px-4">${esc(PAYMENT_LABEL[o.paymentStatus] || o.paymentStatus)}</td>
+            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-extrabold border ${m.cls}">${esc(m.label)}</span></td>
+            <td class="py-3 px-4 text-right font-bold">${kes(o.total)}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      renderAdminVettingTable() {
+        const tbody = document.getElementById('admin-vetting-table-body');
+        if (!tbody) return;
+        const couriers = (this.adminData ? this.adminData.users : []).filter((u) => u.role === 'rider');
+        const pendingCount = couriers.filter((u) => u.vettingStatus === 'PENDING_VETTING').length;
+        document.getElementById('pending-vetting-badge').innerText = `${pendingCount} Rider${pendingCount === 1 ? '' : 's'} Pending Vetting`;
+        if (!couriers.length) { tbody.innerHTML = '<tr><td colspan="6" class="py-4 px-4 text-center text-slate-400">No couriers registered.</td></tr>'; return; }
+        tbody.innerHTML = couriers.map((c) => {
+          const isPending = c.vettingStatus === 'PENDING_VETTING';
+          return `<tr class="hover:bg-slate-50/80 transition">
+            <td class="py-3 px-4 font-bold text-slate-900">${esc(c.name)}</td>
+            <td class="py-3 px-4 font-mono">${esc(c.nationalId || 'N/A')}</td>
+            <td class="py-3 px-4 font-mono font-bold">${esc(c.plate || 'N/A')}</td>
+            <td class="py-3 px-4 font-mono text-slate-500">${esc(c.licenseNo || 'N/A')}</td>
+            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${isPending ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">${esc(c.vettingStatus)}</span></td>
+            <td class="py-3 px-4 text-right">${isPending
+              ? `<button onclick="app.approveCourierVetting('${esc(c.id)}', this)" class="px-3 py-1 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-[11px] transition shadow-sm"><i class="fa-solid fa-stamp mr-1"></i> Approve License & Plate</button>`
+              : '<span class="text-[11px] font-semibold text-emerald-600"><i class="fa-solid fa-check"></i> Certified</span>'}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      async approveCourierVetting(courierId, btn) {
+        this.setBusy(btn, true, 'Approving');
+        try {
+          const { user } = await this.api('POST', `/api/admin/couriers/${courierId}/approve`);
+          this.showToast('Courier Approved', `${user.name} is verified and can accept Homa Bay dispatches.`, 'success');
+          await this.loadAdmin();
+        } catch (e) {
+          this.setBusy(btn, false);
+          this.showToast('Approval Failed', e.message, 'error');
+        }
+      }
+
+      renderAdminUserDirectory() {
+        const tbody = document.getElementById('admin-users-table-body');
+        if (!tbody) return;
+        const users = this.adminData ? this.adminData.users : [];
+        const q = (document.getElementById('admin-user-search')?.value || '').toLowerCase();
+        const filtered = users.filter((u) => u.name.toLowerCase().includes(q) || u.phone.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+        document.getElementById('user-count-badge').innerText = `${users.length} Users Total`;
+        if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="6" class="py-4 px-4 text-center text-slate-400">${users.length ? 'No users match your search.' : 'No users yet.'}</td></tr>`; return; }
+        tbody.innerHTML = filtered.map((u) => `<tr class="hover:bg-slate-50/80 transition">
+            <td class="py-3 px-4 font-bold text-slate-900">${esc(u.name)}</td>
+            <td class="py-3 px-4 font-mono font-medium">${esc(u.phone)}</td>
+            <td class="py-3 px-4 text-slate-500">${esc(u.email)}</td>
+            <td class="py-3 px-4 font-bold uppercase text-[10px]">${esc(u.role)}</td>
+            <td class="py-3 px-4 text-emerald-600 font-semibold"><i class="fa-solid fa-circle-check"></i> Consented</td>
+            <td class="py-3 px-4 text-right">${this.currentUser && u.id === this.currentUser.id
+              ? '<span class="text-[11px] text-slate-400">You</span>'
+              : `<button onclick="app.adminDeleteUser('${esc(u.id)}')" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[11px] transition"><i class="fa-solid fa-trash-can mr-1"></i> Erase</button>`}</td>
+          </tr>`).join('');
+      }
+
+      filterUserDirectory() { this.renderAdminUserDirectory(); }
+
+      async adminDeleteUser(userId) {
+        const target = this.adminData && this.adminData.users.find((u) => u.id === userId);
+        if (!target) return;
+        const ok = await this.confirmDialog('Erase account?', `Permanently erase ${target.name} (${target.email}) and their personal data under ODPC Section 40? This cannot be undone.`, 'Erase account');
+        if (!ok) return;
+        try {
+          await this.api('DELETE', `/api/admin/users/${userId}`);
+          this.showToast('User Erased', `${target.name} removed from the registry.`, 'success');
+          await this.loadAdmin();
+        } catch (e) {
+          this.showToast('Erase Failed', e.message, 'error');
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * AUTHENTICATION & VALIDATION
+       * ----------------------------------------------------------- */
+      validateLegalNames(fullName) {
+        if (!fullName) return false;
+        const parts = fullName.trim().split(/\s+/);
+        return parts.length >= 2 && parts.every((p) => p.length >= 2);
+      }
+
+      normalizeKenyanPhone(rawPhone) {
+        if (!rawPhone) return { isValid: false, normalized: '' };
+        const clean = rawPhone.replace(/[\s\-()]/g, '');
+        if (/^(07\d{8}|01\d{8})$/.test(clean)) return { isValid: true, normalized: `+254${clean.substring(1)}` };
+        if (/^\+254(7\d{8}|1\d{8})$/.test(clean)) return { isValid: true, normalized: clean };
+        return { isValid: false, normalized: clean };
+      }
+
+      validatePasswordRules(password) {
+        return password && password.length >= 8 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password);
+      }
+
+      liveValidatePhone(input) {
+        const res = this.normalizeKenyanPhone(input.value);
+        const preview = document.getElementById('phone-normalized-preview');
+        if (res.isValid) preview.innerHTML = `Normalized: <strong class="text-brand-700 font-mono">${esc(res.normalized)}</strong> <i class="fa-solid fa-check text-brand-600"></i>`;
+        else preview.innerHTML = 'Format: <strong>07XXXXXXXX</strong> or <strong>01XXXXXXXX</strong> (10 digits)';
+      }
+
+      liveValidatePassword() {
+        if (this.activeAuthMode !== 'signup') return;
+        const pwd = document.getElementById('auth-password').value;
+        const pill = document.getElementById('password-strength-pill');
+        pill.classList.remove('hidden');
+        if (this.validatePasswordRules(pwd)) {
+          pill.className = 'text-[10px] font-bold mt-1 text-emerald-600';
+          pill.innerHTML = '<i class="fa-solid fa-check-circle"></i> Password meets alphanumeric standard (8+ chars).';
+        } else {
+          pill.className = 'text-[10px] font-bold mt-1 text-rose-500';
+          pill.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Must be at least 8 characters with letters & numbers.';
+        }
+        this.liveValidatePasswordMatch();
+      }
+
+      liveValidatePasswordMatch() {
+        if (this.activeAuthMode !== 'signup') return;
+        const pwd = document.getElementById('auth-password').value;
+        const confirmPwd = document.getElementById('auth-password-confirm').value;
+        const matchMsg = document.getElementById('password-match-msg');
+        matchMsg.classList.remove('hidden');
+        if (!confirmPwd) { matchMsg.classList.add('hidden'); return; }
+        if (pwd === confirmPwd) {
+          matchMsg.className = 'text-[11px] mt-1 font-semibold text-emerald-600';
+          matchMsg.innerHTML = '<i class="fa-solid fa-check"></i> Passwords match.';
+        } else {
+          matchMsg.className = 'text-[11px] mt-1 font-semibold text-rose-500';
+          matchMsg.innerHTML = '<i class="fa-solid fa-xmark"></i> Passwords do not match.';
+        }
+      }
+
+      handleRoleChangeInAuth(select) {
+        const group = document.getElementById('field-courier-vetting-group');
+        if (select.value === 'rider' && this.activeAuthMode === 'signup') group.classList.remove('hidden');
+        else group.classList.add('hidden');
+      }
+
+      openAuthModal(initialMode = 'login') {
+        document.getElementById('modal-auth').classList.remove('hidden');
+        this.toggleAuthMode(initialMode);
+      }
+
+      closeAuthModal() {
+        document.getElementById('modal-auth').classList.add('hidden');
+      }
+
+      fillDemo(email, password) {
+        this.toggleAuthMode('login');
+        document.getElementById('auth-email').value = email;
+        document.getElementById('auth-password').value = password;
+      }
+
+      toggleAuthMode(mode) {
+        this.activeAuthMode = mode;
+        const nameField = document.getElementById('field-signup-name');
+        const phoneField = document.getElementById('field-signup-phone');
+        const confirmPwdField = document.getElementById('field-signup-confirm-pwd');
+        const odpcField = document.getElementById('field-signup-odpc');
+        const courierGroup = document.getElementById('field-courier-vetting-group');
+        const submitBtn = document.getElementById('auth-submit-btn');
+        const tabLogin = document.getElementById('auth-tab-login');
+        const tabSignup = document.getElementById('auth-tab-signup');
+        const roleSelect = document.getElementById('auth-role');
+        const roleWrap = roleSelect.closest('div');
+        const adminOpt = roleSelect.querySelector('option[value="admin"]');
+        const demo = document.getElementById('auth-demo-accounts');
+
+        if (mode === 'signup') {
+          nameField.classList.remove('hidden');
+          phoneField.classList.remove('hidden');
+          confirmPwdField.classList.remove('hidden');
+          odpcField.classList.remove('hidden');
+          odpcField.classList.add('flex');
+          roleWrap.classList.remove('hidden');
+          if (adminOpt) { adminOpt.disabled = true; adminOpt.hidden = true; }
+          if (roleSelect.value === 'admin') roleSelect.value = 'customer';
+          if (roleSelect.value === 'rider') courierGroup.classList.remove('hidden');
+          if (demo) demo.classList.add('hidden');
+          submitBtn.innerText = 'Agree & Send SMS Verification';
+          tabSignup.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          tabSignup.classList.remove('text-slate-600');
+          tabLogin.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+          tabLogin.classList.add('text-slate-600');
+        } else {
+          nameField.classList.add('hidden');
+          phoneField.classList.add('hidden');
+          confirmPwdField.classList.add('hidden');
+          odpcField.classList.add('hidden');
+          courierGroup.classList.add('hidden');
+          roleWrap.classList.add('hidden'); // the server knows each account's role
+          if (demo) demo.classList.remove('hidden');
+          document.getElementById('password-strength-pill').classList.add('hidden');
+          document.getElementById('password-match-msg').classList.add('hidden');
+          submitBtn.innerText = 'Sign In to GDrop';
+          tabLogin.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          tabLogin.classList.remove('text-slate-600');
+          tabSignup.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+          tabSignup.classList.add('text-slate-600');
+        }
+      }
+
+      async handleAuthSubmit(e) {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value.trim();
+        const password = document.getElementById('auth-password').value;
+        const role = document.getElementById('auth-role').value;
+        const submitBtn = document.getElementById('auth-submit-btn');
+
+        if (this.activeAuthMode === 'signup') {
+          const fullname = document.getElementById('auth-fullname').value.trim();
+          const rawPhone = document.getElementById('auth-phone').value.trim();
+          const confirmPwd = document.getElementById('auth-password-confirm').value;
+          const odpcChecked = document.getElementById('auth-odpc-consent').checked;
+
+          if (!this.validateLegalNames(fullname)) return this.showToast('Legal Name Required', 'Please provide at least two official names as registered on your National ID.', 'error');
+          const phoneResult = this.normalizeKenyanPhone(rawPhone);
+          if (!phoneResult.isValid) return this.showToast('Invalid Kenyan Phone', 'Phone number must be exactly 10 digits starting with 07 or 01 (e.g. 0712345678).', 'error');
+          if (!this.validatePasswordRules(password)) return this.showToast('Weak Password', 'Password must be at least 8 characters long and contain both letters and numbers.', 'error');
+          if (password !== confirmPwd) return this.showToast('Password Mismatch', 'The repeated password does not match.', 'error');
+          if (!odpcChecked) return this.showToast('ODPC Consent Required', 'You must consent to statutory processing under the Kenya Data Protection Act 2019.', 'error');
+
+          const body = { name: fullname, email, phone: phoneResult.normalized, password, role, odpcConsent: true };
+          if (role === 'rider') {
+            body.nationalId = document.getElementById('auth-national-id').value.trim();
+            body.plate = document.getElementById('auth-motorbike-plate').value.trim().toUpperCase();
+            body.licenseNo = document.getElementById('auth-license-no').value.trim();
+            if (!body.nationalId || !body.plate || !body.licenseNo) return this.showToast('Vetting Info Missing', 'Please supply National ID, Bodaboda Plate, and Driving License number.', 'error');
+          }
+
+          this.setBusy(submitBtn, true, 'Sending SMS');
+          try {
+            const r = await this.api('POST', '/api/auth/signup', body);
+            this.pendingOtp = r;
+            this.closeAuthModal();
+            document.getElementById('otp-phone-display').innerText = r.phone;
+            document.getElementById('otp-input').value = '';
+            const hint = document.getElementById('otp-demo-hint');
+            if (r.demoCode) {
+              hint.innerHTML = `SMS gateway is in demo mode, so no text was sent. Your code is <strong class="font-mono tracking-widest">${esc(r.demoCode)}</strong>.`;
+              hint.classList.remove('hidden');
+            } else hint.classList.add('hidden');
+            document.getElementById('modal-otp').classList.remove('hidden');
+            document.getElementById('otp-input').focus();
+          } catch (err) {
+            this.showToast('Registration Failed', err.message, 'error');
+          } finally {
+            this.setBusy(submitBtn, false);
+          }
+        } else {
+          this.setBusy(submitBtn, true, 'Signing in');
+          try {
+            const r = await this.api('POST', '/api/auth/login', { email, password });
+            this.token = r.token;
+            this.closeAuthModal();
+            document.getElementById('auth-password').value = '';
+            await this.onSignedIn(r.user);
+          } catch (err) {
+            this.showToast(err.status === 404 ? 'Account Not Found' : 'Sign-In Failed', err.message, 'error');
+          } finally {
+            this.setBusy(submitBtn, false);
+          }
+        }
+      }
+
+      async verifyOtpCode() {
+        const code = document.getElementById('otp-input').value.trim();
+        if (!/^\d{6}$/.test(code)) return this.showToast('Invalid OTP', 'Please enter the complete 6-digit confirmation code.', 'error');
+        if (!this.pendingOtp) return this.showToast('Start Again', 'Please complete the registration form first.', 'error');
+        const btn = document.getElementById('otp-submit-btn');
+        this.setBusy(btn, true, 'Verifying');
+        try {
+          const r = await this.api('POST', '/api/auth/verify-otp', { otpId: this.pendingOtp.otpId, code });
+          this.pendingOtp = null;
+          this.token = r.token;
+          document.getElementById('modal-otp').classList.add('hidden');
+          await this.onSignedIn(r.user, { silent: true });
+          const pending = r.user.role === 'rider' && r.user.vettingStatus !== 'VERIFIED';
+          this.showToast('Account Verified', pending ? 'Account created. An administrator will vet your licence and plate before you can accept jobs.' : 'SMS code confirmed. Your GDrop account is ready.', 'success');
+        } catch (err) {
+          this.showToast('Verification Failed', err.message, 'error');
+        } finally {
+          this.setBusy(btn, false);
+        }
+      }
+
+      updateUserSessionUI() {
+        const signedInBlock = document.getElementById('auth-signed-in');
+        const signedOutBlock = document.getElementById('auth-signed-out');
+        if (this.currentUser) {
+          const u = this.currentUser;
+          signedInBlock.classList.remove('hidden');
+          signedOutBlock.classList.add('hidden');
+          document.getElementById('user-display-name').innerText = u.name;
+          document.getElementById('user-order-tier').innerText = u.role === 'customer'
+            ? `${u.completedOrdersCount} Orders Verified`
+            : u.role === 'rider' ? (u.vettingStatus === 'VERIFIED' ? `${u.completedOrdersCount} Deliveries` : 'Vetting Pending') : 'Administrator';
+          document.getElementById('acc-details-name').innerText = u.name;
+          document.getElementById('acc-details-phone').innerText = u.phone;
+          document.getElementById('acc-details-email').innerText = u.email;
+          document.getElementById('acc-details-role').innerText = u.role;
+        } else {
+          signedInBlock.classList.add('hidden');
+          signedOutBlock.classList.remove('hidden');
+        }
+        this.updatePaymentEligibilityUI();
+      }
+
+      async logoutUser() {
+        try { if (this.token) await this.api('POST', '/api/auth/logout'); } catch (e) { /* ignore */ }
+        this.clearSession();
+        this.closeAccountModal();
+        this.showToast('Signed Out', 'You have been signed out of GDrop.', 'info');
+      }
+
+      /* -------------------------------------------------------------
+       * ODPC RIGHT TO ERASURE
+       * ----------------------------------------------------------- */
+      openAccountModal() {
+        if (!this.currentUser) return this.openAuthModal('login');
+        document.getElementById('modal-account').classList.remove('hidden');
+      }
+
+      closeAccountModal() {
+        document.getElementById('modal-account').classList.add('hidden');
+      }
+
+      async customerSelfDeleteAccount() {
+        if (!this.currentUser) return;
+        const u = this.currentUser;
+        const ok = await this.confirmDialog('Delete your account?', `This permanently deletes your GDrop account (${u.email}) under Section 40 of the Kenya Data Protection Act, including your telemetry and trip history.`, 'Delete my account');
+        if (!ok) return;
+        try {
+          await this.api('DELETE', '/api/me');
+          this.closeAccountModal();
+          this.clearSession();
+          this.showToast('Account Erased', `All data for ${u.name} has been purged.`, 'error');
+        } catch (e) {
+          this.showToast('Deletion Failed', e.message, 'error');
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * GEOLOCATION & 40KM GEOFENCE (HOMA BAY)
+       * ----------------------------------------------------------- */
+      calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+        return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+      }
+
+      requestBrowserLocation() {
+        const btnText = document.getElementById('loc-btn-text');
+        const pill = document.getElementById('loc-status-pill');
+        if (!navigator.geolocation) return this.showToast('Geolocation Unsupported', 'Your browser does not support GPS location access.', 'error');
+        btnText.innerText = 'Locating GPS...';
+        pill.innerText = 'Requesting permission...';
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const d = this.calculateHaversineDistance(this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng, pos.coords.latitude, pos.coords.longitude);
+            btnText.innerText = 'Location Active';
+            if (d <= this.MAX_RADIUS_KM) {
+              pill.innerText = `Within Zone (${d.toFixed(1)}km from Posta)`;
+              pill.className = 'text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-800 text-emerald-200 font-semibold border border-emerald-700';
+              this.showToast('GDrop Geofence Verified', `Located ${d.toFixed(1)} km from Homa Bay Town Center.`, 'success');
+            } else {
+              pill.innerText = `Outside 40km Hub (${d.toFixed(1)}km away)`;
+              pill.className = 'text-[10px] px-2.5 py-0.5 rounded-full bg-rose-900 text-rose-200 font-semibold border border-rose-800';
+              this.showToast('Outside Service Boundary', `Location is ${d.toFixed(1)}km from Homa Bay. GDrop operates within a 40km perimeter.`, 'error');
+            }
+          },
+          () => {
+            btnText.innerText = 'Detect GPS Location';
+            pill.innerText = 'Permission Denied / Posta Default';
+            this.showToast('Location Denied', 'Using default Homa Bay Town Center coordinates.', 'info');
+          },
+          { timeout: 10000, enableHighAccuracy: true }
+        );
+      }
+
+      fillWithCurrentLocation(inputId, label, fallback, toastTitle) {
+        const input = document.getElementById(inputId);
+        const done = () => { this.setAutoLocationStyling(input, true); this.recalculateRoute(); };
+        if (!navigator.geolocation) { input.value = `${fallback} (Default)`; return done(); }
+        input.value = 'Detecting current coordinates...';
+        input.classList.remove('auto-located');
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            input.value = `${label} (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}) — Homa Bay`;
+            done();
+            this.showToast(toastTitle, 'GPS location acquired and verified.', 'success');
+          },
+          () => { input.value = `${fallback} (GPS Fallback)`; done(); },
+          { timeout: 8000 }
+        );
+      }
+      fillOriginWithCurrentLocation() { this.fillWithCurrentLocation('courier-origin', 'Current Location', 'Homa Bay Town Posta Hub', 'Origin Detected'); }
+      fillDestWithCurrentLocation() { this.fillWithCurrentLocation('courier-destination', 'Current Spot', 'Homa Bay Waterfront', 'Destination Detected'); }
+      fillShoppingDropWithCurrentLocation() { this.fillWithCurrentLocation('shopping-dropoff', 'Current Address', 'Shauri Yako Estate', 'Drop-off Detected'); }
+
+      selectPresetLocation(name) {
+        const target = document.getElementById(this.courierDirection === 'send' ? 'courier-destination' : 'courier-origin');
+        target.value = name;
+        this.setAutoLocationStyling(target, true);
+        this.recalculateRoute();
+      }
+
+      /* -------------------------------------------------------------
+       * SEND VS RECEIVE
+       * ----------------------------------------------------------- */
+      setCourierDirection(direction) {
+        this.courierDirection = direction;
+        const btnSend = document.getElementById('direction-btn-send');
+        const btnReceive = document.getElementById('direction-btn-receive');
+        const explainer = document.getElementById('direction-explainer');
+        const originLabel = document.getElementById('courier-origin-label');
+        const destLabel = document.getElementById('courier-dest-label');
+        const on = 'py-2 px-3 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2';
+        const off = 'py-2 px-3 rounded-xl text-slate-600 font-bold text-xs hover:text-slate-900 transition flex items-center justify-center gap-2';
+        if (direction === 'send') {
+          btnSend.className = on; btnReceive.className = off;
+          explainer.innerText = 'You are sending a package from your location to a recipient in Homa Bay County.';
+          originLabel.innerHTML = '<i class="fa-solid fa-circle-dot text-brand-600 mr-1"></i> Origin (Your Pickup Point)';
+          destLabel.innerHTML = '<i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Destination (Recipient Drop-off)';
+        } else {
+          btnReceive.className = on; btnSend.className = off;
+          explainer.innerText = 'A GDrop courier will collect an item from a sender or merchant and bring it to you.';
+          originLabel.innerHTML = '<i class="fa-solid fa-circle-dot text-brand-600 mr-1"></i> Collection Point (Sender\'s Address)';
+          destLabel.innerHTML = '<i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Your Destination (Where You Will Receive It)';
+        }
+        this.updateFareQuote();
+      }
+
+      updateCourierDirectionUI() { this.setCourierDirection(this.courierDirection); }
+
+      /* -------------------------------------------------------------
+       * PORTAL SWITCHER
+       * ----------------------------------------------------------- */
+      setPortalView(portalName) {
+        if (portalName === 'admin' && !this.canView('admin')) {
+          this.showToast('Administrator Access', 'Sign in with an administrator account to open the Admin Hub.', 'info');
+          if (!this.currentUser) this.openAuthModal('login');
+          return;
+        }
+        this.activeView = portalName;
+        document.querySelectorAll('.portal-container').forEach((el) => el.classList.add('hidden'));
+        document.querySelectorAll('.portal-tab').forEach((btn) => {
+          btn.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+          btn.classList.add('text-slate-600');
+        });
+        const activeBtn = document.getElementById(`nav-btn-${portalName}`);
+        const activeContainer = document.getElementById(`portal-${portalName}`);
+        if (activeBtn && activeContainer) {
+          activeBtn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          activeBtn.classList.remove('text-slate-600');
+          activeContainer.classList.remove('hidden');
+        }
+        safeStore.set('gdrop_active_view', portalName);
+        if (portalName === 'customer' && this.map) setTimeout(() => this.map.invalidateSize(), 200);
+        if (portalName === 'rider') this.renderRiderPortal();
+      }
+
+      /* -------------------------------------------------------------
+       * SERVICE & TARIFF (display only — the server recomputes)
+       * ----------------------------------------------------------- */
+      setServiceType(type) {
+        this.serviceType = type;
+        const courierTab = document.getElementById('tab-service-courier');
+        const shoppingTab = document.getElementById('tab-service-shopping');
+        const courierForm = document.getElementById('section-courier-form');
+        const shoppingForm = document.getElementById('section-shopping-form');
+        const [on, off] = type === 'courier' ? [courierTab, shoppingTab] : [shoppingTab, courierTab];
+        on.classList.add('bg-white', 'text-slate-900', 'shadow-sm'); on.classList.remove('text-slate-600');
+        off.classList.remove('bg-white', 'text-slate-900', 'shadow-sm'); off.classList.add('text-slate-600');
+        courierForm.classList.toggle('hidden', type !== 'courier');
+        shoppingForm.classList.toggle('hidden', type === 'courier');
+        this.updatePaymentEligibilityUI();
+        this.recalculateRoute();
+      }
+
+      setTip(amount, el) {
+        this.selectedTip = amount;
+        document.querySelectorAll('.tip-btn').forEach((btn) => {
+          btn.classList.remove('bg-brand-600', 'text-white', 'border-brand-600');
+          btn.classList.add('bg-white', 'border-slate-200');
+        });
+        const target = el || (typeof event !== 'undefined' && event && event.target);
+        if (target && target.classList) {
+          target.classList.add('bg-brand-600', 'text-white', 'border-brand-600');
+          target.classList.remove('bg-white', 'border-slate-200');
+        }
+        this.updateFareQuote();
+      }
+
+      toggleScheduleField() {
+        const toggle = document.getElementById('schedule-toggle');
+        document.getElementById('schedule-inputs').classList.toggle('hidden', !toggle.checked);
+      }
+
+      addShoppingStop() {
+        const container = document.getElementById('shopping-stops-list');
+        const stopIndex = container.children.length + 1;
+        const div = document.createElement('div');
+        div.className = 'flex items-center gap-2 stop-item';
+        div.innerHTML = `
+          <span class="w-6 h-6 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">${stopIndex}</span>
+          <input type="text" value="" placeholder="Stop ${stopIndex}: Chemist or Store in Homa Bay" class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium" oninput="app.handleManualLocationInput(this)" onchange="app.recalculateRoute()">
+          <button onclick="app.removeShoppingStop(this)" class="text-slate-400 hover:text-rose-500 p-1" aria-label="Remove stop"><i class="fa-solid fa-trash-can text-xs"></i></button>`;
+        container.appendChild(div);
+        this.extraStopsCount = Math.max(0, container.children.length - 1);
+        this.updateFareQuote();
+      }
+
+      removeShoppingStop(btn) {
+        btn.parentElement.remove();
+        const container = document.getElementById('shopping-stops-list');
+        this.extraStopsCount = Math.max(0, container.children.length - 1);
+        this.updateFareQuote();
+      }
+
+      addShoppingItemRow() {
+        const container = document.getElementById('shopping-items-container');
+        const div = document.createElement('div');
+        div.className = 'flex items-center gap-2 item-row bg-slate-50 p-2 rounded-xl border border-slate-200';
+        div.innerHTML = `
+          <input type="text" placeholder="Item description" value="" class="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+          <input type="number" placeholder="Qty" value="" min="1" class="w-12 sm:w-16 shrink-0 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-center" oninput="app.calculateShoppingSubtotal()">
+          <div class="relative w-24 sm:w-28 shrink-0">
+            <span class="absolute left-2 top-2 text-[10px] text-slate-400 font-bold">KES</span>
+            <input type="number" placeholder="Est. Price" value="" min="0" class="w-full pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-right item-budget" oninput="app.calculateShoppingSubtotal()">
+          </div>
+          <button onclick="app.removeShoppingItemRow(this)" class="text-slate-400 hover:text-rose-500 p-1" aria-label="Remove item"><i class="fa-solid fa-trash-can text-xs"></i></button>`;
+        container.appendChild(div);
+        this.calculateShoppingSubtotal();
+      }
+
+      removeShoppingItemRow(btn) {
+        btn.closest('.item-row').remove();
+        this.calculateShoppingSubtotal();
+      }
+
+      readShoppingItems() {
+        return Array.from(document.querySelectorAll('.item-row')).map((row) => {
+          const inputs = row.querySelectorAll('input');
+          return { name: (inputs[0]?.value || '').trim(), qty: parseInt(inputs[1]?.value, 10) || 1, price: parseFloat(row.querySelector('.item-budget')?.value) || 0 };
+        }).filter((it) => it.name || it.price);
+      }
+
+      calculateShoppingSubtotal() {
+        const sum = this.readShoppingItems().reduce((s, it) => s + it.price * it.qty, 0);
+        this.shoppingGoodsEstimatedSubtotal = sum;
+        document.getElementById('shopping-goods-sum').innerText = `KES ${sum.toFixed(2)}`;
+        this.updateFareQuote();
+      }
+
+      updateFareQuote() {
+        const distanceFare = this.estimatedDistanceKm * this.ratePerKm;
+        document.getElementById('fare-dist-label').innerText = `Distance Tariff (est. ${this.estimatedDistanceKm.toFixed(1)} km @ KES ${this.ratePerKm}/km)`;
+        document.getElementById('fare-dist-cost').innerText = `KES ${distanceFare.toFixed(2)}`;
+
+        if (this.serviceType === 'courier') {
+          const w = document.querySelector('input[name="weight-tier"]:checked')?.value || 'light';
+          this.weightSurcharge = this.weightSurcharges[w] || 0;
+        } else this.weightSurcharge = 0;
+
+        const stopsSurcharge = this.serviceType === 'shopping' ? this.extraStopsCount * this.multiStopFeePerStop : 0;
+        const totalSurcharges = this.weightSurcharge + stopsSurcharge;
+        const rowSurcharges = document.getElementById('row-surcharges');
+        rowSurcharges.classList.toggle('hidden', !(totalSurcharges > 0));
+        if (totalSurcharges > 0) document.getElementById('cost-surcharges').innerText = `KES ${totalSurcharges.toFixed(2)}`;
+
+        let commission = 0;
+        const rowCommission = document.getElementById('row-shopping-commission');
+        if (this.serviceType === 'shopping') {
+          commission = this.shoppingGoodsEstimatedSubtotal * this.shoppingCommissionRate;
+          rowCommission.classList.remove('hidden');
+          document.getElementById('cost-shopping-commission').innerText = `KES ${commission.toFixed(2)}`;
+        } else rowCommission.classList.add('hidden');
+
+        const subtotal = this.baseFare + distanceFare + totalSurcharges + commission + this.selectedTip;
+        this.currentQuoteTotal = Math.max(this.minimumFare, subtotal);
+        document.getElementById('grand-total-display').innerText = `KES ${this.currentQuoteTotal.toFixed(2)}`;
+      }
+
+      updatePaymentEligibilityUI() {
+        const podRadio = document.getElementById('radio-pod');
+        const podLabel = document.getElementById('pod-label');
+        const podTitle = document.getElementById('pod-title');
+        const podDesc = document.getElementById('pod-desc');
+        const tag = document.getElementById('payment-eligibility-tag');
+        const completed = this.currentUser ? this.currentUser.completedOrdersCount : 0;
+        const lock = () => {
+          podRadio.disabled = true;
+          if (podRadio.checked) { podRadio.checked = false; const pre = document.querySelector('input[name="payment-method"][value="mpesa_prepay"]'); if (pre) pre.checked = true; }
+          podLabel.classList.add('opacity-50', 'cursor-not-allowed', 'bg-slate-100');
+        };
+        if (this.serviceType === 'shopping') {
+          lock();
+          podTitle.innerText = 'Pay On Delivery (Unavailable for Shopping)';
+          podDesc.innerText = 'Personal shopping concierge requires upfront verified M-Pesa escrow.';
+          tag.innerHTML = '<span class="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Prepayment Mandatory</span>';
+        } else if (completed < this.podUnlockAfter) {
+          lock();
+          podTitle.innerText = `Pay On Delivery (${this.podUnlockAfter - completed} more order${this.podUnlockAfter - completed === 1 ? '' : 's'} to unlock)`;
+          podDesc.innerText = `First ${this.podUnlockAfter} deliveries require M-Pesa prepayment to establish client verification.`;
+          tag.innerHTML = '<span class="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Pre-Payment Required</span>';
+        } else {
+          podRadio.disabled = false;
+          podLabel.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-slate-100');
+          podTitle.innerText = 'Pay On Delivery (GDrop Business Till)';
+          podDesc.innerText = 'Unlocked. Settle via Till once the courier verifies your handover PIN.';
+          tag.innerHTML = '<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">POD Unlocked</span>';
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * ORDERS — CUSTOMER
+       * ----------------------------------------------------------- */
+      buildOrderPayload() {
+        const paymentMethod = document.querySelector('input[name="payment-method"]:checked')?.value || 'mpesa_prepay';
+        const base = { serviceType: this.serviceType, tip: this.selectedTip, paymentMethod, distanceKm: this.estimatedDistanceKm };
+        if (document.getElementById('schedule-toggle')?.checked) {
+          const d = document.getElementById('schedule-date')?.value, t = document.getElementById('schedule-time')?.value;
+          if (d) base.scheduledFor = `${d}${t ? ' ' + t : ''}`;
+        }
+        if (this.serviceType === 'courier') {
+          return {
+            ...base,
+            direction: this.courierDirection,
+            origin: document.getElementById('courier-origin').value.trim(),
+            destination: document.getElementById('courier-destination').value.trim(),
+            recipientName: document.getElementById('courier-recipient-name').value.trim(),
+            recipientPhone: document.getElementById('courier-recipient-phone').value.trim(),
+            weightTier: document.querySelector('input[name="weight-tier"]:checked')?.value || 'light',
+          };
+        }
+        const stops = Array.from(document.querySelectorAll('#shopping-stops-list input')).map((i) => i.value.trim()).filter(Boolean);
+        return { ...base, stops, origin: stops[0] || '', destination: document.getElementById('shopping-dropoff').value.trim(), items: this.readShoppingItems() };
+      }
+
+      async handleOrderSubmission() {
+        if (!this.currentUser) {
+          this.showToast('Sign In Required', 'Please sign in or register to dispatch a courier.', 'info');
+          return this.openAuthModal('login');
+        }
+        if (this.currentUser.role !== 'customer') return this.showToast('Customer Account Needed', 'Orders are placed from customer accounts. Sign in as a customer to request a delivery.', 'info');
+
+        const p = this.buildOrderPayload();
+        if (p.serviceType === 'courier') {
+          if (!p.origin || !p.destination) return this.showToast('Locations Required', 'Please enter or GPS-detect both pickup and destination locations.', 'error');
+          if (!this.validateLegalNames(p.recipientName)) return this.showToast('Recipient Name Required', 'Please specify at least two legal names for the recipient.', 'error');
+        } else {
+          if (!p.destination) return this.showToast('Drop-off Required', 'Please enter where the shopping should be delivered.', 'error');
+          if (!p.items.some((i) => i.price > 0)) return this.showToast('Add Items', 'Add at least one item with an estimated price.', 'error');
+        }
+        if (this.estimatedDistanceKm > this.MAX_RADIUS_KM) return this.showToast('Outside 40km Boundary', `This route (${this.estimatedDistanceKm.toFixed(1)} km) exceeds GDrop's 40km perimeter in Homa Bay.`, 'error');
+
+        const btn = document.querySelector('[onclick="app.handleOrderSubmission()"]');
+        this.setBusy(btn, true, 'Placing order');
+        try {
+          const r = await this.api('POST', '/api/orders', p);
+          this.activeOrder = r.order;
+          this.renderCustomerTracker();
+          if (r.payment) this.openMpesaModal(r.order, r.payment);
+          else this.showToast('GDrop Dispatched', `${r.order.id} is live. A courier will accept shortly (Pay on Delivery).`, 'success');
+          this.loadCustomerOrders();
+        } catch (e) {
+          this.showToast('Order Not Placed', e.message, 'error');
+        } finally {
+          this.setBusy(btn, false);
+        }
+      }
+
+      openMpesaModal(order, payment) {
+        this.pendingPayment = { ...payment, orderId: order.id };
+        document.getElementById('mpesa-modal-amount').innerText = kes(payment.amount);
+        document.getElementById('mpesa-modal-ref').innerText = order.id;
+        document.getElementById('mpesa-modal-prompt').innerText = `Do you want to pay KES ${Number(payment.amount).toFixed(2)} to GDROP CONCIERGE HOMA BAY Account ${order.id}? Enter PIN: ****`;
+        const sim = payment.mode === 'simulation';
+        document.getElementById('mpesa-sim-btn').classList.toggle('hidden', !sim);
+        document.getElementById('mpesa-dismiss-label').innerText = sim ? 'Dismiss / Abort Transaction' : 'Close — I will pay later';
+        document.getElementById('mpesa-modal-status').innerText = sim
+          ? 'Sandbox mode: no money moves. Use the button below to simulate entering your PIN.'
+          : `Prompt sent to ${payment.phone}. Waiting for Safaricom confirmation...`;
+        document.getElementById('modal-mpesa').classList.remove('hidden');
+        if (!sim) this.pollPayment(payment.id);
+      }
+
+      pollPayment(paymentId) {
+        clearInterval(this.paymentPoll);
+        const started = Date.now();
+        this.paymentPoll = setInterval(async () => {
+          if (Date.now() - started > 120000) { clearInterval(this.paymentPoll); document.getElementById('mpesa-modal-status').innerText = 'No confirmation yet. You can retry payment from the tracker.'; return; }
+          try {
+            const { payment } = await this.api('GET', `/api/payments/${paymentId}`);
+            if (payment.status !== 'PENDING') { clearInterval(this.paymentPoll); this.onPaymentSettled(payment); }
+          } catch (e) { /* keep polling */ }
+        }, 3000);
+      }
+
+      onPaymentSettled(payment) {
+        document.getElementById('modal-mpesa').classList.add('hidden');
+        if (payment.status === 'SUCCESS') this.showToast('M-Pesa Cleared', `${kes(payment.amount || (this.pendingPayment && this.pendingPayment.amount))} received by GDrop Paybill. Receipt: ${payment.receipt}`, 'success');
+        else this.showToast('Payment Not Completed', 'The M-Pesa prompt was cancelled or failed. You can retry from the tracker.', 'error');
+        this.pendingPayment = null;
+        this.loadCustomerOrders();
+      }
+
+      async confirmMpesaSuccess() {
+        if (!this.pendingPayment) return;
+        const btn = document.getElementById('mpesa-sim-btn');
+        this.setBusy(btn, true, 'Clearing');
+        try {
+          const { payment } = await this.api('POST', `/api/payments/${this.pendingPayment.id}/simulate`, { outcome: 'success' });
+          this.onPaymentSettled({ ...payment, amount: this.pendingPayment.amount });
+        } catch (e) {
+          this.showToast('Payment Error', e.message, 'error');
+        } finally {
+          this.setBusy(btn, false);
+        }
+      }
+
+      async cancelMpesaPrompt() {
+        clearInterval(this.paymentPoll);
+        document.getElementById('modal-mpesa').classList.add('hidden');
+        if (this.pendingPayment && this.pendingPayment.mode === 'simulation') {
+          try { await this.api('POST', `/api/payments/${this.pendingPayment.id}/simulate`, { outcome: 'cancel' }); } catch (e) { /* ignore */ }
+          this.showToast('Transaction Aborted', 'M-Pesa payment prompt dismissed. You can retry from the tracker.', 'info');
+        }
+        this.pendingPayment = null;
+        this.loadCustomerOrders();
+      }
+
+      async retryPayment() {
+        if (!this.activeOrder) return;
+        const btn = document.getElementById('tracker-pay-btn');
+        this.setBusy(btn, true, 'Sending prompt');
+        try {
+          const { payment } = await this.api('POST', `/api/orders/${this.activeOrder.id}/pay`);
+          this.openMpesaModal(this.activeOrder, payment);
+        } catch (e) {
+          this.showToast('Payment Error', e.message, 'error');
+        } finally {
+          this.setBusy(btn, false);
+        }
+      }
+
+      async cancelActiveOrder() {
+        const o = this.activeOrder;
+        if (!o) return;
+        const fee = o.rider ? this.cancellationFee : 0;
+        const ok = await this.confirmDialog('Cancel this dispatch?', fee ? `A courier is already on the way, so a KES ${fee} cancellation fee applies.` : 'No courier has been assigned yet, so there is no cancellation fee.', 'Cancel dispatch');
+        if (!ok) return;
+        try {
+          const r = await this.api('POST', `/api/orders/${o.id}/cancel`);
+          this.showToast('Order Cancelled', r.cancellationFee ? `Cancellation logged. KES ${r.cancellationFee} fee applied.` : 'Cancellation logged. No fee applied.', r.cancellationFee ? 'error' : 'info');
+          await this.loadCustomerOrders();
+        } catch (e) {
+          this.showToast('Could Not Cancel', e.message, 'error');
+        }
+      }
+
+      async loadCustomerOrders() {
+        if (!this.currentUser || this.currentUser.role !== 'customer') return;
+        try {
+          const prevStatus = this.activeOrder && this.activeOrder.status;
+          const prevId = this.activeOrder && this.activeOrder.id;
+          const { orders } = await this.api('GET', '/api/orders/mine');
+          this.customerOrders = orders;
+          const active = orders.find((o) => ACTIVE_STATUSES.includes(o.status));
+          const recent = orders.find((o) => !ACTIVE_STATUSES.includes(o.status) && Date.now() - o.updatedAt < 30 * 60 * 1000);
+          this.activeOrder = active || recent || null;
+          if (this.activeOrder && prevId === this.activeOrder.id && prevStatus !== this.activeOrder.status) this.announceStatus(this.activeOrder);
+          if (this.activeOrder && this.activeOrder.status === 'delivered' && prevStatus && prevStatus !== 'delivered') this.reloadMe();
+          this.renderCustomerTracker();
+          this.maybePromptVariance(this.activeOrder);
+        } catch (e) { /* surfaced elsewhere */ }
+      }
+
+      announceStatus(o) {
+        const r = o.rider ? o.rider.name : 'Your courier';
+        const msgs = {
+          placed: ['Payment Confirmed', `${o.id} is on the dispatch radar.`],
+          assigned: ['Courier Assigned', `${r} accepted ${o.id}.`],
+          at_store: ['Courier at Store', `${r} is shopping for your items.`],
+          in_transit: ['In Transit', `${r} is on the way. Keep your handover PIN ready.`],
+          delivered: ['Delivered Successfully', 'Package handed over and PIN validated.'],
+          cancelled: ['Order Cancelled', `${o.id} was cancelled.`],
+        };
+        const m = msgs[o.status];
+        if (m) this.showToast(m[0], m[1], o.status === 'delivered' ? 'success' : 'info');
+        if (o.status === 'in_transit' && !o.riderLocation) this.animateRiderMarker();
+      }
+
+      renderCustomerTracker() {
+        const o = this.activeOrder;
+        const card = document.getElementById('tracker-card');
+        const empty = document.getElementById('tracker-empty');
+        if (!card || !empty) return;
+        if (!o) {
+          card.classList.add('hidden');
+          empty.classList.remove('hidden');
+          document.getElementById('tracker-empty-text').innerText = !this.currentUser
+            ? 'Sign in and request a courier or personal shopper. Live tracking will appear here.'
+            : this.currentUser.role === 'customer' ? 'Request a courier or personal shopper. Live tracking will appear here.' : 'Customer order tracking appears here for customer accounts.';
+          const hist = document.getElementById('tracker-history');
+          const past = (this.customerOrders || []).slice(0, 5);
+          hist.classList.toggle('hidden', !past.length);
+          hist.innerHTML = past.length ? '<div class="text-[10px] uppercase font-bold text-slate-400">Recent orders</div>' + past.map((p) => `
+            <div class="flex justify-between text-[11px]"><span class="font-mono font-bold text-slate-700">${esc(p.id)}</span><span class="text-slate-500">${esc((STATUS_META[p.status] || {}).label || p.status)} • ${kes(p.total)}</span></div>`).join('') : '';
+          return;
+        }
+        empty.classList.add('hidden');
+        card.classList.remove('hidden');
+        const m = STATUS_META[o.status] || STATUS_META.placed;
+        document.getElementById('tracker-order-id').innerText = `#${o.id}`;
+        document.getElementById('tracker-route').innerText = `${o.origin || 'Pickup'} → ${o.destination || 'Drop-off'} • ${Number(o.distanceKm).toFixed(1)} km • ${kes(o.total)}`;
+        const pill = document.getElementById('tracker-status-pill');
+        pill.className = `px-3 py-1 rounded-full text-xs font-bold border ${m.cls}`;
+        pill.innerText = o.status === 'cancelled' && o.cancelFee ? `Cancelled (KES ${o.cancelFee} Fee)` : m.label;
+        document.getElementById('tracker-progress-bar').style.width = m.bar;
+        for (let i = 1; i <= 5; i++) document.getElementById(`step-${i}`).className = i <= m.step ? 'text-brand-600 font-bold' : 'text-slate-400 font-bold';
+        document.getElementById('tracker-pod-code').innerText = o.podPin || '----';
+
+        document.getElementById('tracker-payment-text').innerText = (PAYMENT_LABEL[o.paymentStatus] || o.paymentStatus) + (o.mpesaReceipt ? ` • ${o.mpesaReceipt}` : '');
+        document.getElementById('tracker-pay-btn').classList.toggle('hidden', !(o.status === 'pending_payment' && o.paymentStatus !== 'PENDING'));
+
+        const riderCard = document.getElementById('tracker-rider-card');
+        if (o.rider) {
+          riderCard.classList.remove('hidden');
+          document.getElementById('tracker-rider-initials').innerText = initials(o.rider.name);
+          document.getElementById('tracker-rider-name').innerText = o.rider.name;
+          document.getElementById('tracker-rider-meta').innerText = `Plate: ${o.rider.plate || '—'} • ${o.rider.phone}`;
+          document.getElementById('tracker-rider-call').href = `tel:${o.rider.phone}`;
+        } else riderCard.classList.add('hidden');
+
+        const receiptBox = document.getElementById('tracker-receipt-box');
+        const showReceipt = o.serviceType === 'shopping' && ['at_store', 'in_transit', 'delivered'].includes(o.status);
+        receiptBox.classList.toggle('hidden', !showReceipt);
+        if (showReceipt) {
+          const v = o.varianceStatus === 'PENDING' ? ' <span class="text-rose-600 font-bold">Your approval is needed.</span>' : o.varianceStatus === 'APPROVED' ? ' Price change approved.' : o.varianceStatus === 'REJECTED' ? ' Price change declined.' : '';
+          document.getElementById('tracker-receipt-summary').innerHTML = o.hasReceipt
+            ? `Till receipt uploaded by ${esc(o.rider ? o.rider.name : 'your courier')}. ${o.receiptAmount != null ? `Amount: <strong>${kes(o.receiptAmount)}</strong> (budget ${kes(o.goodsEstimate)}).` : ''}${v}`
+            : `Waiting for the courier to upload the till receipt. Budget: <strong>${kes(o.goodsEstimate)}</strong>.`;
+        }
+        document.getElementById('tracker-cancel-wrap').classList.toggle('hidden', !ACTIVE_STATUSES.includes(o.status) || o.status === 'in_transit');
+        document.getElementById('tracker-live-label').innerText = ACTIVE_STATUSES.includes(o.status) ? 'GDrop Real-Time Dispatch' : 'Last Dispatch';
+
+        if (o.riderLocation) this.placeRiderMarker(o.riderLocation.lat, o.riderLocation.lng, false);
+      }
+
+      /* -------------------------------------------------------------
+       * ORDERS — COURIER
+       * ----------------------------------------------------------- */
+      async loadRiderDashboard() {
+        if (!this.currentUser || this.currentUser.role !== 'rider') return;
+        try {
+          const prevActive = this.riderDash && this.riderDash.active;
+          this.riderDash = await this.api('GET', '/api/rider/dashboard');
+          const a = this.riderDash.active;
+          if (prevActive && a && prevActive.id === a.id && prevActive.varianceStatus === 'PENDING' && a.varianceStatus !== 'PENDING') {
+            this.showToast(a.varianceStatus === 'APPROVED' ? 'Customer Approved' : 'Customer Declined', a.varianceStatus === 'APPROVED' ? 'The price change was approved. You can start transit.' : 'Stay within the original budget.', a.varianceStatus === 'APPROVED' ? 'success' : 'info');
+          }
+          if (prevActive && !a) {
+            const was = await this.api('GET', `/api/orders/${prevActive.id}`).catch(() => null);
+            if (was && was.order.status === 'cancelled') this.showToast('Job Cancelled', `The customer cancelled ${prevActive.id}.`, 'error');
+          }
+          this.currentUser = this.riderDash.rider;
+          this.renderRiderPortal();
+        } catch (e) { /* surfaced elsewhere */ }
+      }
+
+      renderRiderPortal() {
+        const nameEl = document.getElementById('rider-profile-name');
+        if (!nameEl) return;
+        const u = this.currentUser && this.currentUser.role === 'rider' ? this.currentUser : null;
+        const badge = document.getElementById('rider-compliance-badge');
+        const d = this.riderDash;
+        document.getElementById('rider-avatar').innerText = u ? initials(u.name) : '--';
+        nameEl.innerText = u ? u.name : 'Courier sign-in required';
+        document.getElementById('rider-profile-meta').innerHTML = u
+          ? `Plate: <strong>${esc(u.plate || '—')}</strong> • License: <strong>${esc(u.licenseNo || '—')}</strong> • ID: <strong>${esc(u.nationalId || '—')}</strong>`
+          : 'Sign in with a courier account to see your jobs.';
+        if (!u) { badge.className = 'hidden'; }
+        else if (u.vettingStatus === 'VERIFIED') { badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300'; badge.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i> NTSA VETTED & ACTIVE'; }
+        else { badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300'; badge.innerHTML = '<i class="fa-solid fa-hourglass-half mr-1"></i> AWAITING NTSA VETTING'; }
+        document.getElementById('rider-today-payout').innerText = kes(d ? d.todayPayout : 0);
+
+        const noActive = document.getElementById('rider-no-active');
+        const noActiveText = document.getElementById('rider-no-active-text');
+        const activeBox = document.getElementById('rider-active-task-container');
+        if (d && d.active) { noActive.classList.add('hidden'); activeBox.classList.remove('hidden'); this.renderRiderActiveJob(); }
+        else {
+          activeBox.classList.add('hidden'); noActive.classList.remove('hidden');
+          noActiveText.innerText = !u ? 'Sign in with a courier account to receive dispatches.' : u.vettingStatus !== 'VERIFIED' ? 'An administrator must approve your licence and plate before you can accept jobs.' : 'Accept a job from the radar below to start a delivery.';
+        }
+        this.renderRadar();
+      }
+
+      renderRiderActiveJob() {
+        const j = this.riderDash && this.riderDash.active;
+        if (!j) return;
+        const shopping = j.serviceType === 'shopping';
+        const m = STATUS_META[j.status] || STATUS_META.assigned;
+        document.getElementById('rider-active-order-id').innerText = `Order #${j.id}`;
+        document.getElementById('rider-active-status').innerText = `Status: ${m.label}`;
+        document.getElementById('rider-active-service').innerText = shopping ? 'Shopping & Concierge' : 'Express Courier';
+        document.getElementById('rider-active-payout').innerText = kes(j.riderPayout);
+
+        document.getElementById('rider-stop1-label').innerText = shopping ? `Stop 1${j.stops.length > 1 ? `–${j.stops.length}` : ''}: Shopping Merchant${j.stops.length > 1 ? 's' : ''}` : (j.direction === 'receive' ? 'Stop 1: Collection Point' : 'Stop 1: Pickup');
+        document.getElementById('rider-stop1-title').innerText = shopping ? (j.stops.join(' → ') || j.origin) : j.origin;
+        document.getElementById('rider-stop1-notes').innerText = shopping
+          ? `Shopping list: ${j.items.map((i) => `${i.qty}× ${i.name || 'item'} (~KES ${i.price})`).join(', ')}`
+          : `Parcel: ${j.weightTier} weight tier${j.description ? ` • ${j.description}` : ''}`;
+        document.getElementById('rider-stop1-budget').innerText = shopping ? `Estimated Budget: ${kes(j.goodsEstimate)}` : '';
+        document.getElementById('rider-stop2-title').innerText = j.destination;
+        const recip = shopping ? (j.customer ? `${j.customer.name} (${j.customer.phone || ''})` : '') : `${j.recipientName || ''}${j.recipientPhone ? ` (${j.recipientPhone})` : ''}`;
+        document.getElementById('rider-stop2-notes').innerText = `${shopping ? 'Customer' : 'Recipient'}: ${recip}`;
+        document.getElementById('rider-stop2-escrow').innerText = j.paymentMethod === 'mpesa_pod' ? 'Payment: Collect on GDrop Till after PIN handover' : `Escrow: M-Pesa Pre-Paid${j.paymentStatus === 'PAID' ? ' (Cleared)' : ''}`;
+
+        document.getElementById('rider-receipt-module').classList.toggle('hidden', !shopping);
+        if (shopping) {
+          const amtInput = document.getElementById('rider-actual-receipt-val');
+          if (document.activeElement !== amtInput) amtInput.value = j.receiptAmount != null ? j.receiptAmount : '';
+          const status = document.getElementById('receipt-status-text');
+          if (j.hasReceipt) { status.innerText = 'Receipt attached'; status.className = 'font-bold text-emerald-400 text-xs'; document.getElementById('btn-zoom-receipt').classList.remove('hidden'); }
+          else { status.innerText = 'No receipt attached'; status.className = 'font-bold text-slate-300 text-xs'; document.getElementById('btn-zoom-receipt').classList.add('hidden'); document.getElementById('receipt-preview-img').classList.add('hidden'); document.getElementById('receipt-placeholder-icon').classList.remove('hidden'); }
+          this.evaluatePriceVariance();
+        }
+        const atStoreBtn = document.getElementById('rider-btn-at-store');
+        const transitBtn = document.getElementById('rider-btn-in-transit');
+        atStoreBtn.classList.toggle('hidden', !shopping || j.status !== 'assigned');
+        transitBtn.classList.toggle('hidden', j.status === 'in_transit');
+        transitBtn.disabled = shopping && (!j.hasReceipt || j.varianceStatus === 'PENDING');
+        transitBtn.classList.toggle('opacity-50', transitBtn.disabled);
+        transitBtn.title = transitBtn.disabled ? (j.varianceStatus === 'PENDING' ? 'Waiting for customer approval' : 'Upload the till receipt first') : '';
+      }
+
+      renderRadar() {
+        const list = document.getElementById('rider-radar-list');
+        const count = document.getElementById('rider-radar-count');
+        if (!list) return;
+        const open = (this.riderDash && this.riderDash.open) || [];
+        count.innerText = `${open.length} Dispatch${open.length === 1 ? '' : 'es'} Near You`;
+        const u = this.currentUser && this.currentUser.role === 'rider' ? this.currentUser : null;
+        if (!u || u.vettingStatus !== 'VERIFIED' || !open.length) {
+          list.innerHTML = `<div class="p-4 rounded-2xl border border-dashed border-slate-300 text-center text-xs text-slate-500">${!u ? 'Sign in as a courier to see open dispatches.' : u.vettingStatus !== 'VERIFIED' ? 'The radar unlocks once your vetting is approved.' : 'No open dispatches right now. New orders appear here automatically.'}</div>`;
+          return;
+        }
+        const busy = !!(this.riderDash && this.riderDash.active);
+        list.innerHTML = open.map((o) => {
+          const shopping = o.serviceType === 'shopping';
+          const tag = shopping ? (o.stops.length > 1 ? 'MULTI-STOP ERRAND' : 'SHOPPING ERRAND') : 'EXPRESS COURIER';
+          const tagCls = shopping ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800';
+          const detail = shopping ? `${o.items.length} item${o.items.length === 1 ? '' : 's'} • ${Math.max(1, o.stops.length)} stop${o.stops.length > 1 ? 's' : ''} • Budget ${kes(o.goodsEstimate)}` : `${o.weightTier} parcel${o.description ? ` • ${o.description}` : ''}`;
+          return `<div class="p-4 rounded-2xl border border-slate-200 hover:border-brand-500 transition bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div class="space-y-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${tagCls}">${tag}</span>
+                <span class="text-xs font-bold text-slate-900" style="overflow-wrap:anywhere">${esc(o.origin)} ➔ ${esc(o.destination)}</span>
+              </div>
+              <div class="text-xs text-slate-500">${esc(detail)} • ${Number(o.distanceKm).toFixed(1)} km • <span class="font-mono">${esc(o.id)}</span></div>
+            </div>
+            <div class="flex items-center gap-4 w-full md:w-auto justify-between">
+              <div class="text-right">
+                <span class="text-sm font-extrabold text-slate-900 block font-display">${kes(o.riderPayout)}</span>
+                <span class="text-[10px] font-bold ${o.paymentStatus === 'PAID' ? 'text-emerald-600' : 'text-amber-600'}">${o.paymentStatus === 'PAID' ? 'M-Pesa Cleared' : 'Pay on Delivery'}${o.tip ? ` • +KES ${o.tip} tip` : ''}</span>
+              </div>
+              <button onclick="app.acceptDispatch('${esc(o.id)}', this)" ${busy ? 'disabled title="Finish your active job first"' : ''} class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition shadow-sm ${busy ? 'opacity-50 cursor-not-allowed' : ''}">Accept Job</button>
+            </div>
+          </div>`;
+        }).join('');
+      }
+
+      async acceptDispatch(orderId, btn) {
+        if (!this.currentUser || this.currentUser.role !== 'rider') {
+          this.showToast('Courier Sign-In Required', 'Sign in with a courier account to accept jobs.', 'info');
+          return this.openAuthModal('login');
+        }
+        this.setBusy(btn, true, 'Accepting');
+        try {
+          await this.api('POST', `/api/orders/${orderId}/accept`);
+          this.showToast('GDrop Job Accepted', `${orderId} assigned to you. Route active in Homa Bay.`, 'success');
+          this.uploadedReceiptDataUrl = '';
+          await this.loadRiderDashboard();
+          document.getElementById('rider-active-task-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e) {
+          this.setBusy(btn, false);
+          this.showToast('Could Not Accept', e.message, 'error');
+          this.loadRiderDashboard();
+        }
+      }
+
+      async updateDeliveryState(state) {
+        const j = this.riderDash && this.riderDash.active;
+        if (!j) return this.showToast('No Active Job', 'Accept a dispatch first.', 'info');
+        const btn = document.getElementById(state === 'at_store' ? 'rider-btn-at-store' : 'rider-btn-in-transit');
+        this.setBusy(btn, true, 'Updating');
+        try {
+          await this.api('POST', `/api/orders/${j.id}/status`, { status: state });
+          this.showToast(state === 'at_store' ? 'Status Synced' : 'Transit Begun', state === 'at_store' ? 'Marked as at the store. The customer can see your progress.' : 'The customer has been notified you are on the way.', 'info');
+          if (state === 'in_transit' && !this.isGpsStreaming) this.showToast('Share Your Location', 'Tap "Start Live GPS Telemetry Stream" so the customer can follow you.', 'info');
+        } catch (e) {
+          this.showToast('Status Not Updated', e.message, 'error');
+        } finally {
+          this.setBusy(btn, false);
+          await this.loadRiderDashboard();
+        }
+      }
+
+      /* -------------------------------------------------------------
+       * MAP
+       * ----------------------------------------------------------- */
+      initMap() {
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer || typeof L === 'undefined') return;
+        this.map = L.map('map', { zoomControl: true, attributionControl: false }).setView([this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng], 11);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri, OpenStreetMap contributors' }).addTo(this.map);
+        this.geofenceCircle = L.circle([this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng], {
+          radius: 40000, color: '#10b981', fillColor: '#10b981', fillOpacity: 0.08, weight: 2, dashArray: '5, 5',
+        }).addTo(this.map).bindPopup('<b>GDrop Operating Zone</b><br>40km radius from Homa Bay Town Posta');
+        const pin = (bg, icon, size = 32, extra = '') => L.divIcon({
+          className: `custom-map-pin ${extra}`,
+          html: `<div class="${size === 36 ? 'w-9 h-9' : 'w-8 h-8'} rounded-full ${bg} flex items-center justify-center font-bold text-xs shadow-lg border-2 ${size === 36 ? 'border-amber-400' : 'border-white'}"><i class="fa-solid ${icon}"></i></div>`,
+          iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+        });
+        this.originMarker = L.marker(this.coords.origin, { icon: pin('bg-brand-600 text-white', 'fa-location-arrow') }).addTo(this.map).bindPopup('<b>Pickup</b>');
+        this.destMarker = L.marker(this.coords.destination, { icon: pin('bg-rose-600 text-white', 'fa-location-dot') }).addTo(this.map).bindPopup('<b>Destination</b>');
+        this.riderMarker = L.marker(this.coords.courier, { icon: pin('bg-slate-900 text-amber-400', 'fa-motorcycle', 36, 'pulse-driver') }).addTo(this.map).bindPopup('<b>GDrop Rider</b>');
+        this.routePolyline = L.polyline([this.coords.origin, this.coords.destination], { color: '#10b981', weight: 4, opacity: 0.85, dashArray: '6, 6' }).addTo(this.map);
+        this.map.fitBounds(this.routePolyline.getBounds(), { padding: [30, 30] });
+      }
+
+      recenterMap() {
+        if (this.map) this.map.setView([this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng], 11);
+      }
+
+      parseCoords(text) {
+        const m = String(text || '').match(/\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)/);
+        return m ? [parseFloat(m[1]), parseFloat(m[2])] : null;
+      }
+
+      // Distance: GPS coordinates when both ends have them; preset "(NNkm)" hints; otherwise keep the current estimate.
+      recalculateRoute() {
+        const shopping = this.serviceType === 'shopping';
+        const originText = shopping ? (document.querySelector('#shopping-stops-list input')?.value || '') : document.getElementById('courier-origin').value;
+        const destText = shopping ? document.getElementById('shopping-dropoff').value : document.getElementById('courier-destination').value;
+        const a = this.parseCoords(originText), b = this.parseCoords(destText);
+        let km = null;
+        if (a && b) km = this.calculateHaversineDistance(a[0], a[1], b[0], b[1]) * 1.3;
+        else {
+          const hint = `${originText} ${destText}`.match(/\((\d+(?:\.\d+)?)\s*km\)/i);
+          if (hint) km = parseFloat(hint[1]);
+          else if (a || b) {
+            const p = a || b;
+            km = this.calculateHaversineDistance(this.HOMA_BAY_CENTER.lat, this.HOMA_BAY_CENTER.lng, p[0], p[1]) * 1.3 || null;
+          }
+        }
+        if (km != null && Number.isFinite(km)) this.estimatedDistanceKm = Math.max(1, Math.round(km * 10) / 10);
+        if (this.map && this.originMarker) {
+          if (a) this.originMarker.setLatLng(a);
+          if (b) this.destMarker.setLatLng(b);
+          if (a || b) this.routePolyline.setLatLngs([this.originMarker.getLatLng(), this.destMarker.getLatLng()]);
+        }
+        const mins = Math.round(this.estimatedDistanceKm * 2 + 4);
+        document.getElementById('route-distance-badge').innerText = `${this.estimatedDistanceKm} km (Est. ${mins} mins)`;
+        this.updateFareQuote();
+      }
+
+      placeRiderMarker(lat, lng, pan) {
+        if (!this.riderMarker) return;
+        this.riderMarker.setLatLng([lat, lng]);
+        if (pan && this.map && this.activeView === 'customer') this.map.panTo([lat, lng], { animate: true });
+      }
+
+      animateRiderMarker() {
+        if (!this.riderMarker) return;
+        let step = 0;
+        const total = 20;
+        const [sLat, sLng] = [this.originMarker.getLatLng().lat, this.originMarker.getLatLng().lng];
+        const [eLat, eLng] = [this.destMarker.getLatLng().lat, this.destMarker.getLatLng().lng];
+        const iv = setInterval(() => {
+          step++;
+          if (this.activeOrder && this.activeOrder.riderLocation) return clearInterval(iv); // real GPS took over
+          this.riderMarker.setLatLng([sLat + (eLat - sLat) * (step / total), sLng + (eLng - sLng) * (step / total)]);
+          if (step >= total) clearInterval(iv);
+        }, 300);
+      }
+
+      /* -------------------------------------------------------------
+       * NOTIFICATIONS
+       * ----------------------------------------------------------- */
+      showToast(title, message, type = 'info') {
+        const toast = document.getElementById('global-toast');
+        document.getElementById('toast-title').innerText = title;
+        document.getElementById('toast-message').innerText = message;
+        const iconEl = document.getElementById('toast-icon');
+        if (type === 'success') iconEl.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+        else if (type === 'error') iconEl.innerHTML = '<i class="fa-solid fa-circle-exclamation text-rose-400"></i>';
+        else iconEl.innerHTML = '<i class="fa-solid fa-circle-info text-blue-400"></i>';
+        toast.classList.remove('hidden');
+        if (this.toastTimeout) clearTimeout(this.toastTimeout);
+        this.toastTimeout = setTimeout(() => this.dismissToast(), 5000);
+      }
+
+      dismissToast() {
+        document.getElementById('global-toast').classList.add('hidden');
+      }
+    }
+
+    let app;
+    window.addEventListener('DOMContentLoaded', () => {
+      app = new GDropApp();
+      window.app = app;
+      app.init();
+    });
+  </script>
+<script data-pplx-inline-edit>
+(function () {
+  if (window === window.top) return;
+
+  const allowedParentOrigins = ["https://www.perplexity.ai","https://perplexity.ai","https://testing.perplexity.ai","https://staging.perplexity.ai","https://*.preview.i.perplexity.ai","http://perplexity.localhost","http://localhost:1420","http://127.0.0.1:1420","http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"];
+  const MAX_FONT_BYTES = 500 * 1024;
+  const MAX_TOTAL_FONT_BYTES = 2 * 1024 * 1024;
+  const DEFAULT_LINE_HEIGHT = 16;
+  let scrollForwarding = false;
+  let scrollRaf = 0;
+  let trustedTopOrigin = null;
+
+  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
+  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
+  // across multiple labels.
+  function matchesAllowedOrigin(origin) {
+    if (!origin) return false;
+    for (const entry of allowedParentOrigins) {
+      if (!entry.includes("*")) {
+        if (entry === origin) return true;
+        continue;
+      }
+      const pattern = new RegExp(
+        "^" +
+          entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") +
+          "$",
+      );
+      if (pattern.test(origin)) return true;
+    }
+    return false;
+  }
+
+  // Trust decision: when the sender is same-origin-visible (event.origin is a
+  // real origin like https://www.perplexity.ai) we trust event.origin directly.
+  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
+  // broker's stamped `parentOrigin` to identify the top window. The fallback
+  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
+  // on the response path (see postToTrustedTop) to ensure replies can't be
+  // delivered to anyone but the actual top window of that claimed origin.
+  function getTrustedParentOrigin(event) {
+    const forwardedParentOrigin =
+      typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
+    const parentOrigin = event.origin === "null" ? forwardedParentOrigin : event.origin;
+    return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
+  }
+
+  // All responses go to window.top with targetOrigin = the allowlisted origin.
+  // An attacker that iframes us inside their own null-origin broker can claim
+  // any parentOrigin they like, but the browser will drop the reply whenever
+  // the real top's origin doesn't match — so the screenshot never leaves.
+  function postToTrustedTop(message) {
+    if (!trustedTopOrigin) return;
+    try {
+      window.top.postMessage(message, trustedTopOrigin);
+    } catch (_error) {}
+  }
+
+  const PICK_CAPABILITIES = ["pick"];
+  const PICK_CHAIN_LENGTH = 4;
+  const PICK_MAX_TEXT_CHARS = 120;
+  const PICK_MAX_HTML_CHARS = 300;
+
+  function truncate(value, maxChars) {
+    return value.length > maxChars ? value.slice(0, maxChars - 1) + "…" : value;
+  }
+
+  function isPickableElement(element) {
+    return (
+      element instanceof Element &&
+      element !== document.documentElement &&
+      element !== document.body
+    );
+  }
+
+  function resolvePickTarget(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const element = document.elementFromPoint(x, y);
+    return isPickableElement(element) ? element.closest("svg") || element : null;
+  }
+
+  function pickLabel(element) {
+    if (element.id) return element.localName + "#" + element.id;
+    return [element.localName].concat(Array.from(element.classList).slice(0, 2)).join(".");
+  }
+
+  // Only attributes that help find the element in source. data-* values and URL
+  // query strings or fragments can carry tokens.
+  const PICK_ATTRIBUTES = new Set([
+    "id",
+    "class",
+    "name",
+    "type",
+    "role",
+    "alt",
+    "aria-label",
+    "href",
+    "src",
+  ]);
+
+  function pickAttributeValue(attribute) {
+    return attribute.name === "href" || attribute.name === "src"
+      ? attribute.value.split(/[?#]/)[0]
+      : attribute.value;
+  }
+
+  function describePickElement(element) {
+    const chain = [];
+    for (
+      let current = element;
+      isPickableElement(current) && chain.length < PICK_CHAIN_LENGTH;
+      current = current.parentElement
+    ) {
+      chain.unshift(current);
+    }
+    const attributes = Array.from(element.attributes)
+      .filter((attribute) => PICK_ATTRIBUTES.has(attribute.name))
+      .map((attribute) => ` ${attribute.name}="${pickAttributeValue(attribute).replace(/"/g, "&quot;")}"`)
+      .join("");
+    const text = (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+    return {
+      chain: chain.map(pickLabel),
+      html: truncate(`<${element.localName}${attributes}>`, PICK_MAX_HTML_CHARS),
+      text: text ? truncate(text, PICK_MAX_TEXT_CHARS) : undefined,
+    };
+  }
+
+  // Hover asks once per frame, and innerText on a large section forces layout,
+  // so only the rect is re-read while the pointer stays on the same element.
+  // Clicks ask for fresh details since the page may have changed the element.
+  let lastPick = null;
+
+  function describePickTarget(element, fresh) {
+    if (fresh || lastPick?.element !== element) {
+      lastPick = { element, details: describePickElement(element) };
+    }
+    const rect = element.getBoundingClientRect();
+    return {
+      rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+      ...lastPick.details,
+    };
+  }
+
+  function inlineAll(original, clone) {
+    if (original.nodeType !== 1 || clone.nodeType !== 1) return;
+
+    try {
+      const computedStyle = getComputedStyle(original);
+      // cssText on a computed style is the serialized declaration in modern
+      // Chromium/Safari — a single read beats enumerating ~400 longhand
+      // properties. Firefox returns "" here, so we fall back on empty.
+      const serialized = computedStyle.cssText;
+      if (serialized) {
+        clone.style.cssText = serialized;
+      } else {
+        const parts = new Array(computedStyle.length);
+        for (let index = 0; index < computedStyle.length; index += 1) {
+          const property = computedStyle[index];
+          parts[index] = `${property}:${computedStyle.getPropertyValue(property)};`;
+        }
+        clone.style.cssText = parts.join("");
+      }
+    } catch (_error) {}
+
+    const originalChildren = original.children;
+    const clonedChildren = clone.children;
+    for (
+      let index = 0;
+      index < originalChildren.length && index < clonedChildren.length;
+      index += 1
+    ) {
+      inlineAll(originalChildren[index], clonedChildren[index]);
+    }
+  }
+
+  function extractFontUrl(srcValue) {
+    const matches = [
+      ...srcValue.matchAll(
+        /url\(["']?([^"')]+)["']?\)(?:\s*format\(["']?([^"')]+)["']?\))?/gi,
+      ),
+    ];
+    if (matches.length === 0) return null;
+    const woff2 = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff2"));
+    if (woff2) return woff2[1];
+    const woff = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff"));
+    if (woff) return woff[1];
+    return matches[0][1];
+  }
+
+  // Cache resolved font URL -> data URI across captures. Fonts on a page
+  // essentially never change, and a batch run emits multiple captures back to
+  // back — without this we'd refetch + re-base64 every time.
+  const fontDataUriCache = new Map();
+  const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
+
+  async function fetchAsDataUri(url) {
+    if (fontDataUriCache.has(url)) return fontDataUriCache.get(url);
+    let dataUri = null;
+    try {
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.size <= MAX_FONT_BYTES) {
+          dataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+    } catch (_error) {
+      dataUri = null;
+    }
+    fontDataUriCache.set(url, dataUri);
+    return dataUri;
+  }
+
+  function collectFontFaceRuleTexts() {
+    const rules = [];
+    for (const sheet of document.styleSheets) {
+      let cssRules;
+      try {
+        cssRules = sheet.cssRules;
+      } catch (_error) {
+        continue;
+      }
+      if (!cssRules) continue;
+      for (const rule of cssRules) {
+        const cssText = rule.cssText || "";
+        if (cssText.startsWith("@font-face")) rules.push(cssText);
+      }
+    }
+    return rules;
+  }
+
+  async function buildInlinedFontCss() {
+    const ruleTexts = collectFontFaceRuleTexts();
+    if (ruleTexts.length === 0) return null;
+
+    const resolved = ruleTexts.map((cssText) => {
+      if (!SRC_DECLARATION_RE.test(cssText)) return null;
+      const srcMatch = cssText.match(/src\s*:\s*([^;}]+)[;}]/i);
+      if (!srcMatch) return null;
+      const url = extractFontUrl(srcMatch[1]);
+      if (!url) return null;
+      try {
+        return { cssText, url: new URL(url, document.baseURI).href };
+      } catch (_error) {
+        return null;
+      }
+    });
+
+    const dataUris = await Promise.all(
+      resolved.map((entry) => (entry ? fetchAsDataUri(entry.url) : Promise.resolve(null))),
+    );
+
+    const inlined = [];
+    let totalBytes = 0;
+    for (let index = 0; index < resolved.length; index += 1) {
+      const entry = resolved[index];
+      const dataUri = dataUris[index];
+      if (!entry || !dataUri) continue;
+      const approxBytes = dataUri.length * 0.75;
+      if (totalBytes + approxBytes > MAX_TOTAL_FONT_BYTES) break;
+      totalBytes += approxBytes;
+      inlined.push(entry.cssText.replace(SRC_DECLARATION_RE, `src: url("${dataUri}")`));
+    }
+    return inlined.length > 0 ? inlined.join("\n") : null;
+  }
+
+  function stripExternal(clone) {
+    const images = clone.querySelectorAll("img");
+    for (let index = 0; index < images.length; index += 1) {
+      const src = images[index].getAttribute("src");
+      if (src && !src.startsWith("data:")) images[index].removeAttribute("src");
+    }
+
+    const elements = clone.querySelectorAll("*");
+    for (let index = 0; index < elements.length; index += 1) {
+      const style = elements[index].style.cssText;
+      if (style && style.includes("url(")) {
+        elements[index].style.cssText = style.replace(
+          /url\(["']?(?!data:)[^)"']*["']?\)/gi,
+          "none",
+        );
+      }
+    }
+  }
+
+  function emitScroll() {
+    scrollRaf = 0;
+    if (!scrollForwarding) return;
+    postToTrustedTop({
+      type: "INLINE_EDIT_SCROLL",
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      capabilities: PICK_CAPABILITIES,
+    });
+  }
+
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (!scrollForwarding || scrollRaf) return;
+      scrollRaf = requestAnimationFrame(emitScroll);
+    },
+    { passive: true, capture: true },
+  );
+
+  async function handleCaptureRequest(event) {
+    const requestId = event.data.requestId;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    function postResult(dataUrl) {
+      postToTrustedTop({
+        type: "INLINE_EDIT_SCREENSHOT_RESULT",
+        requestId,
+        dataUrl,
+        scrollX,
+        scrollY,
+      });
+    }
+
+    try {
+      // Wait for any pending web fonts to resolve so both inline metrics and
+      // the @font-face inlining below see the same loaded faces.
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_error) {}
+      }
+
+      const clone = document.documentElement.cloneNode(true);
+      inlineAll(document.documentElement, clone);
+
+      const removedNodes = clone.querySelectorAll("script,link[rel=\"stylesheet\"],style");
+      for (let index = 0; index < removedNodes.length; index += 1) {
+        removedNodes[index].remove();
+      }
+
+      stripExternal(clone);
+
+      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
+      // can resolve them — external font URLs aren't fetched during
+      // foreignObject rendering, which would otherwise force a fallback face
+      // and change text metrics.
+      const inlinedFontCss = await buildInlinedFontCss();
+      if (inlinedFontCss) {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = inlinedFontCss;
+        const head = clone.querySelector("head");
+        if (head) head.appendChild(styleEl);
+        else clone.insertBefore(styleEl, clone.firstChild);
+      }
+
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+        '<foreignObject width="100%" height="100%">' +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">` +
+        `<div style="position:relative;left:-${scrollX}px;top:-${scrollY}px">` +
+        html +
+        "</div></div></foreignObject></svg>";
+      const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      const image = new Image();
+      image.onload = function () {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0);
+        postResult(canvas.toDataURL("image/png"));
+      };
+      image.onerror = function () {
+        postResult(null);
+      };
+      image.src = svgUrl;
+    } catch (_error) {
+      postResult(null);
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!event.data) return;
+    // Only accept messages from the direct parent frame. Blocks sibling /
+    // unrelated-window postMessage senders that could otherwise reach us.
+    if (event.source !== window.parent) return;
+
+    const trustedParentOrigin = getTrustedParentOrigin(event);
+    if (!trustedParentOrigin) return;
+    trustedTopOrigin = trustedParentOrigin;
+
+    if (event.data.type === "INLINE_EDIT_PICK") {
+      const element = resolvePickTarget(event.data.x, event.data.y);
+      postToTrustedTop({
+        type: "INLINE_EDIT_PICK_RESULT",
+        seq: event.data.seq,
+        target: element ? describePickTarget(element, event.data.fresh === true) : null,
+      });
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_START") {
+      scrollForwarding = true;
+      emitScroll();
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_STOP") {
+      scrollForwarding = false;
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_BY") {
+      const { deltaX, deltaY, deltaMode } = event.data;
+      if (!scrollForwarding || !Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
+      if (deltaMode !== 0 && deltaMode !== 1 && deltaMode !== 2) return;
+      const lineHeight =
+        parseFloat(getComputedStyle(document.documentElement).lineHeight) || DEFAULT_LINE_HEIGHT;
+      const scaleX = deltaMode === 1 ? lineHeight : deltaMode === 2 ? window.innerWidth : 1;
+      const scaleY = deltaMode === 1 ? lineHeight : deltaMode === 2 ? window.innerHeight : 1;
+      // The selection overlay receives the wheel event instead of this iframe.
+      // Instant scrolling preserves trackpad deltas even on smooth-scroll sites.
+      window.scrollBy({ left: deltaX * scaleX, top: deltaY * scaleY, behavior: "instant" });
+      emitScroll();
+      return;
+    }
+
+    if (event.data.type !== "INLINE_EDIT_CAPTURE_REQUEST") return;
+
+    handleCaptureRequest(event);
+  });
+})();
+
+</script></body>
+</html>
