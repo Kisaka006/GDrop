@@ -2015,6 +2015,13 @@
           this.setBusy(submitBtn, true, 'Sending SMS');
           try {
             const r = await this.api('POST', '/api/auth/signup', body);
+            if (r.phoneOtpSkipped && r.token && r.user) {
+              this.token = r.token;
+              this.closeAuthModal();
+              await this.onSignedIn(r.user, { silent: true });
+              this.showToast('Staging Account Created', 'Phone-code verification is skipped on protected staging only. Live production still requires SMS verification.', 'info');
+              return;
+            }
             this.pendingOtp = r;
             this.closeAuthModal();
             document.getElementById('otp-phone-display').innerText = r.phone;

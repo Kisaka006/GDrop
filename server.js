@@ -85,6 +85,17 @@ if (process.env.NODE_ENV === 'staging' && (!process.env.GDROP_STAGING_USERNAME |
 }
 app.use((req, res, next) => {
   if (process.env.NODE_ENV !== 'staging') return next();
+  const expectedUsername = process.env.GDROP_STAGING_USERNAME;
+  const expectedPassword = process.env.GDROP_STAGING_PASSWORD;
+  const cookieValue = crypto.createHmac('sha256', expectedPassword).update(expectedUsername).digest('hex');
+  const cookies = String(req.headers.cookie || '').split(';').map((part) => part.trim());
+  const stagingCookie = cookies.find((part) => part.startsWith('gdrop_staging='));
+  const cookieCandidate = stagingCookie ? stagingCookie.slice('gdrop_staging='.length) : '';
+  const candidateBuffer = Buffer.from(cookieCandidate);
+  const cookieBuffer = Buffer.from(cookieValue);
+  if (candidateBuffer.length === cookieBuffer.length && crypto.timingSafeEqual(candidateBuffer, cookieBuffer)) {
+    return next();
+  }
   const authorization = req.get('authorization') || '';
   const encoded = authorization.startsWith('Basic ') ? authorization.slice(6) : '';
   let credentials = '';
@@ -101,11 +112,17 @@ app.use((req, res, next) => {
     const expectedBuffer = Buffer.from(expected);
     return candidateBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(candidateBuffer, expectedBuffer);
   };
-  if (!equalSecret(username, process.env.GDROP_STAGING_USERNAME) ||
-      !equalSecret(password, process.env.GDROP_STAGING_PASSWORD)) {
+  if (!equalSecret(username, expectedUsername) || !equalSecret(password, expectedPassword)) {
     res.set('WWW-Authenticate', 'Basic realm="GDrop private staging"');
     return res.status(401).send('Staging access requires authorization.');
   }
+  res.cookie('gdrop_staging', cookieValue, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'staging' && process.env.RENDER === 'true',
+    sameSite: 'strict',
+    maxAge: 12 * 60 * 60 * 1000,
+    path: '/',
+  });
   next();
 });
 app.use(express.json({ limit: '2mb' }));
@@ -544,9 +561,10 @@ app.post('/api/auth/signup', async (req, res, next) => {
     }
     const otpId = id('otp');
     const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const stagingSkipOtp = process.env.NODE_ENV === 'staging' && process.env.GDROP_STAGING_SKIP_PHONE_OTP === 'true';
     const smsConfigured = !!process.env.AT_API_KEY && !!process.env.AT_USERNAME;
     const demoOtpAllowed = process.env.NODE_ENV !== 'production' || process.env.GDROP_DEMO_OTP === 'true';
-    if (!smsConfigured && !demoOtpAllowed) {
+    if (!stagingSkipOtp && !smsConfigured && !demoOtpAllowed) {
       fail(503, 'Phone verification is unavailable until SMS delivery is configured.', 'SMS_CONFIG_REQUIRED');
     }
     const payload = {
@@ -556,6 +574,18 @@ app.post('/api/auth/signup', async (req, res, next) => {
       plate: role === 'rider' ? String(body.plate).trim().toUpperCase() : null,
       licenseNo: role === 'rider' ? String(body.licenseNo).trim() : null,
     };
+    if (stagingSkipOtp) {
+      db.prepare(`
+        INSERT INTO users(id, name, email, phone, password_hash, role, national_id, plate,
+          license_no, vetting_status, odpc_consent_at, phone_verified_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(payload.id, payload.name, payload.email, payload.phone, payload.passwordHash, payload.role,
+        payload.nationalId, payload.plate, payload.licenseNo,
+        payload.role === 'rider' ? 'PENDING_VETTING' : null,
+        now(), now(), now());
+      const session = createSession(db.prepare('SELECT * FROM users WHERE id = ?').get(payload.id));
+      return res.status(201).json({ ...session, phoneOtpSkipped: true });
+    }
     try {
       await sendOtp(phone, code);
     } catch (error) {

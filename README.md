@@ -69,12 +69,17 @@ GDROP_SEED_DEMO=true
 GDROP_DB=/var/data/gdrop-staging.db
 GDROP_STAGING_USERNAME=your-private-staging-username
 GDROP_STAGING_PASSWORD=a-long-unique-random-password
+GDROP_STAGING_SKIP_PHONE_OTP=true
 ```
 
 Do not add Daraja or SMS credentials to the demo staging service: it uses
 simulated payments and demo OTPs. The app requires HTTP Basic authentication
 for every staging page and API request, so share both the staging URL and its
-access credentials only with trusted testers.
+access credentials only with trusted testers. With
+`GDROP_STAGING_SKIP_PHONE_OTP=true`, staging signups immediately create a test
+account and session so you can test orders without entering an SMS code. This
+marks the test account's phone as verified only in staging. Do not set this
+variable on production; live signups continue to require SMS verification.
 
 Demo accounts are seeded outside production:
 
