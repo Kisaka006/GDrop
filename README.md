@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # GDrop Website
 
 GDrop is an on-demand delivery and concierge web app for Homa Bay, Kenya.
@@ -39,3 +40,7 @@ The database is `data.db` (override with `GDROP_DB`). Demo data is seeded on the
 - The preview iframe blocks browser storage, so the session token is kept in memory and a page refresh requires signing in again.
 - SQLite lives on the host running the server. Use a hosted DB (e.g. Supabase/Postgres) for durable production data.
 - Preview app (Computer): https://www.perplexity.ai/computer/a/gdrop-byA2cvxhRWqbOpZk3S0OXg (asset 6f203672-fc61-456a-9b3a-9664dd2d0e5e).
+=======
+# GDrop
+For a website that should work
+>>>>>>> d445782ead34a33f12df4723efaa72e06c17b5c0
