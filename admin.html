@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GDrop Admin</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172033; background: #f3f6f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem max(1rem, calc((100% - 78rem) / 2)); background: white; border-bottom: 1px solid #dfe5eb; }
+    header strong { font-size: 1.15rem; }
+    header a { color: #526174; font-size: .875rem; }
+    main { width: min(100% - 2rem, 78rem); margin: 2rem auto; }
+    h1 { margin: 0; font-size: 1.5rem; }
+    h2 { margin: 0; font-size: 1.05rem; }
+    p { color: #526174; line-height: 1.5; }
+    .card { padding: 1.25rem; background: white; border: 1px solid #dfe5eb; border-radius: 1rem; box-shadow: 0 8px 24px #1322380a; }
+    #login-card { width: min(100%, 28rem); margin: 4rem auto; padding: 2rem; }
+    label { display: block; margin-top: 1rem; font-size: .85rem; font-weight: 650; }
+    input { display: block; width: 100%; margin-top: .4rem; padding: .75rem; border: 1px solid #c9d2dc; border-radius: .6rem; font: inherit; }
+    button { padding: .65rem .85rem; border: 0; border-radius: .6rem; background: #4338ca; color: white; font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #e8eaf0; color: #263248; }
+    button.danger { background: #b42318; }
+    button:disabled { opacity: .6; cursor: wait; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .stat-label { color: #64748b; font-size: .8rem; font-weight: 700; text-transform: uppercase; }
+    .stat-value { margin-top: .45rem; font-size: 1.65rem; font-weight: 800; }
+    section { margin-top: 1rem; }
+    .table-wrap { overflow-x: auto; margin-top: .75rem; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: .8rem; }
+    th, td { padding: .7rem; border-bottom: 1px solid #edf0f3; vertical-align: middle; }
+    th { color: #64748b; font-size: .7rem; text-transform: uppercase; }
+    td { white-space: nowrap; }
+    .muted { color: #64748b; }
+    .message { min-height: 1.4rem; margin: .75rem 0 0; font-size: .85rem; }
+    .message.error { color: #b42318; }
+    .message.success { color: #067647; }
+    .hidden { display: none !important; }
+    @media (max-width: 600px) {
+      header { padding: 1rem; }
+      .toolbar { align-items: flex-start; }
+      .card { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>GDrop <span style="color:#4338ca">Operations</span></strong>
+    <a href="/">Customer & courier site</a>
+  </header>
+  <main>
+    <section id="login-card" class="card">
+      <h1>Administrator sign in</h1>
+      <p>Use your administrator email and password. Customer and courier accounts cannot sign in here.</p>
+      <form id="login-form">
+        <label for="email">Admin email</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button id="login-button" type="submit" style="width:100%;margin-top:1.25rem">Sign in to Admin</button>
+      </form>
+      <p id="login-message" class="message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <div class="toolbar">
+        <div>
+          <h1>Admin dashboard</h1>
+          <p id="admin-name" class="muted" style="margin:.25rem 0 0"></p>
+        </div>
+        <div style="display:flex;gap:.5rem">
+          <button id="refresh-button" class="secondary" type="button">Refresh</button>
+          <button id="logout-button" class="danger" type="button">Sign out</button>
+        </div>
+      </div>
+      <p id="dashboard-message" class="message" role="status" aria-live="polite"></p>
+
+      <div class="grid">
+        <article class="card"><div class="stat-label">Accounts</div><div id="stat-users" class="stat-value">—</div></article>
+        <article class="card"><div class="stat-label">Customers</div><div id="stat-customers" class="stat-value">—</div></article>
+        <article class="card"><div class="stat-label">Couriers</div><div id="stat-couriers" class="stat-value">—</div></article>
+        <article class="card"><div class="stat-label">Couriers online</div><div id="stat-online" class="stat-value">—</div></article>
+        <article class="card"><div class="stat-label">Active orders</div><div id="stat-active" class="stat-value">—</div></article>
+        <article class="card"><div class="stat-label">Delivered revenue</div><div id="stat-revenue" class="stat-value">—</div></article>
+      </div>
+
+      <section class="card">
+        <h2>Recent orders</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Order</th><th>Service</th><th>Customer</th><th>Courier</th><th>Payment</th><th>Status</th><th>Total</th></tr></thead>
+          <tbody id="orders-body"></tbody>
+        </table></div>
+      </section>
+
+      <section class="card">
+        <h2>Courier vetting</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Name</th><th>Email</th><th>National ID</th><th>Plate</th><th>Licence</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="couriers-body"></tbody>
+        </table></div>
+      </section>
+
+      <section class="card">
+        <h2>User accounts</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Action</th></tr></thead>
+          <tbody id="users-body"></tbody>
+        </table></div>
+      </section>
+    </section>
+  </main>
+  <script>
+    const tokenKey = 'gdrop_admin_token';
+    const loginCard = document.getElementById('login-card');
+    const dashboard = document.getElementById('dashboard');
+    let token = sessionStorage.getItem(tokenKey) || '';
+    let adminUser = null;
+    let overview = null;
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[char]);
+    }
+
+    function formatKes(value) {
+      return `KES ${Number(value || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+    }
+
+    function showMessage(element, message, type = '') {
+      element.textContent = message;
+      element.className = `message ${type}`;
+    }
+
+    async function request(url, options = {}) {
+      const headers = { Accept: 'application/json', ...(options.headers || {}) };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        credentials: 'same-origin',
+      });
+      let data = {};
+      try { data = await response.json(); } catch {}
+      if (!response.ok) {
+        const error = new Error(data.error || `Request failed (${response.status}).`);
+        error.status = response.status;
+        throw error;
+      }
+      return data;
+    }
+
+    function showLogin(message = '') {
+      token = '';
+      adminUser = null;
+      sessionStorage.removeItem(tokenKey);
+      dashboard.classList.add('hidden');
+      loginCard.classList.remove('hidden');
+      if (message) showMessage(document.getElementById('login-message'), message, 'error');
+    }
+
+    function renderDashboard() {
+      const stats = overview.stats;
+      const orderCounts = stats.ordersByStatus || {};
+      const activeOrders = ['placed', 'assigned', 'at_store', 'in_transit', 'pending_payment']
+        .reduce((sum, status) => sum + Number(orderCounts[status] || 0), 0);
+      document.getElementById('admin-name').textContent = `Signed in as ${adminUser.name} (${adminUser.email})`;
+      document.getElementById('stat-users').textContent = stats.totalUsers;
+      document.getElementById('stat-customers').textContent = stats.customers;
+      document.getElementById('stat-couriers').textContent = stats.couriers;
+      document.getElementById('stat-online').textContent = stats.onlineCouriers;
+      document.getElementById('stat-active').textContent = activeOrders;
+      document.getElementById('stat-revenue').textContent = formatKes(stats.deliveredRevenue);
+
+      const ordersBody = document.getElementById('orders-body');
+      ordersBody.innerHTML = overview.recentOrders.length ? overview.recentOrders.map((order) => `
+        <tr>
+          <td>${escapeHtml(order.id)}</td><td>${escapeHtml(order.serviceType)}</td>
+          <td>${escapeHtml(order.customer?.name || '—')}</td><td>${escapeHtml(order.rider?.name || '—')}</td>
+          <td>${escapeHtml(order.paymentStatus)}</td><td>${escapeHtml(order.status)}</td><td>${formatKes(order.total)}</td>
+        </tr>`).join('') : '<tr><td colspan="7" class="muted">No orders yet.</td></tr>';
+
+      const couriers = overview.users.filter((user) => user.role === 'rider');
+      document.getElementById('couriers-body').innerHTML = couriers.length ? couriers.map((courier) => `
+        <tr>
+          <td>${escapeHtml(courier.name)}</td><td>${escapeHtml(courier.email)}</td>
+          <td>${escapeHtml(courier.nationalId || '—')}</td><td>${escapeHtml(courier.plate || '—')}</td>
+          <td>${escapeHtml(courier.licenseNo || '—')}</td><td>${escapeHtml(courier.vettingStatus || 'PENDING')}</td>
+          <td>${courier.vettingStatus === 'PENDING_VETTING'
+            ? `<button type="button" data-approve-id="${escapeHtml(courier.id)}">Approve</button>`
+            : '—'}</td>
+        </tr>`).join('') : '<tr><td colspan="7" class="muted">No couriers registered.</td></tr>';
+
+      document.getElementById('users-body').innerHTML = overview.users.length ? overview.users.map((user) => `
+        <tr>
+          <td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.email)}</td>
+          <td>${escapeHtml(user.phone || '—')}</td><td>${escapeHtml(user.role)}</td>
+          <td>${user.id === adminUser.id ? 'Current admin' : `<button class="danger" type="button" data-delete-id="${escapeHtml(user.id)}">Delete account</button>`}</td>
+        </tr>`).join('') : '<tr><td colspan="5" class="muted">No accounts.</td></tr>';
+
+      loginCard.classList.add('hidden');
+      dashboard.classList.remove('hidden');
+    }
+
+    async function loadDashboard() {
+      const [me, data] = await Promise.all([
+        request('/api/me'),
+        request('/api/admin/overview'),
+      ]);
+      if (me.user.role !== 'admin') {
+        const error = new Error('This page is for administrator accounts only.');
+        error.status = 403;
+        throw error;
+      }
+      adminUser = me.user;
+      overview = data;
+      renderDashboard();
+      showMessage(document.getElementById('dashboard-message'), '');
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = document.getElementById('login-button');
+      button.disabled = true;
+      showMessage(document.getElementById('login-message'), 'Signing in...');
+      try {
+        const result = await request('/api/admin/login', {
+          method: 'POST',
+          body: {
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value,
+          },
+        });
+        token = result.token;
+        adminUser = result.user;
+        await loadDashboard();
+        sessionStorage.setItem(tokenKey, token);
+        document.getElementById('login-form').reset();
+      } catch (error) {
+        showLogin(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById('refresh-button').addEventListener('click', async () => {
+      const button = document.getElementById('refresh-button');
+      button.disabled = true;
+      try {
+        await loadDashboard();
+      } catch (error) {
+        if (error.status === 401 || error.status === 403) showLogin('Your admin session ended. Please sign in again.');
+        else showMessage(document.getElementById('dashboard-message'), error.message, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      try {
+        if (token) await request('/api/auth/logout', { method: 'POST' });
+        showLogin('You have been signed out.');
+      } catch (error) {
+        showLogin(`Signed out on this device, but server sign-out could not be confirmed: ${error.message}`);
+      }
+    });
+
+    document.getElementById('couriers-body').addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-approve-id]');
+      if (!button) return;
+      button.disabled = true;
+      try {
+        await request(`/api/admin/couriers/${encodeURIComponent(button.dataset.approveId)}/approve`, { method: 'POST' });
+        await loadDashboard();
+        showMessage(document.getElementById('dashboard-message'), 'Courier approved.', 'success');
+      } catch (error) {
+        if (error.status === 401 || error.status === 403) showLogin('Your admin session ended. Please sign in again.');
+        else showMessage(document.getElementById('dashboard-message'), error.message, 'error');
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById('users-body').addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-delete-id]');
+      if (!button || !confirm('Permanently delete this account and its order history?')) return;
+      button.disabled = true;
+      try {
+        await request(`/api/admin/users/${encodeURIComponent(button.dataset.deleteId)}`, { method: 'DELETE' });
+        await loadDashboard();
+        showMessage(document.getElementById('dashboard-message'), 'Account and related order data deleted.', 'success');
+      } catch (error) {
+        if (error.status === 401 || error.status === 403) showLogin('Your admin session ended. Please sign in again.');
+        else showMessage(document.getElementById('dashboard-message'), error.message, 'error');
+        button.disabled = false;
+      }
+    });
+
+    if (token) {
+      loadDashboard().catch((error) => {
+        showLogin(error.status === 401 || error.status === 403
+          ? 'Your admin session ended. Please sign in again.'
+          : error.message);
+      });
+    }
+  </script>
+</body>
+</html>

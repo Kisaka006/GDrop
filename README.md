@@ -16,6 +16,29 @@ Open [http://localhost:5000](http://localhost:5000). Set `PORT` to change the
 port, or `GDROP_DB` to choose a different SQLite database file. By default the
 database is created under `data/`.
 
+## Push changes to GitHub
+
+Open PowerShell in the project folder and check which files have changed:
+
+```powershell
+git status
+```
+
+Stage the files you want to publish, review them, commit, and push to `main`:
+
+```powershell
+git add README.md
+git diff --cached
+git commit -m "Describe your changes"
+git push origin main
+```
+
+Replace `README.md` with the paths of the files you changed. To stage all
+changes instead, use `git add -A`, but review `git status` and `git diff
+--cached` first. Never commit `.env` files, passwords, API keys, or other
+secrets. If Render is connected to this GitHub repository, it may deploy
+automatically after the push.
+
 ## Host on Render
 
 GitHub Pages only hosts the static page and cannot run this backend or receive
@@ -50,11 +73,13 @@ create the first production admin without Render Shell access:
    key, your admin email and name, and a unique password of at least 14
    characters. The password is sent only over HTTPS and stored as a scrypt
    hash.
-3. Sign in at the site with the admin email and password. Initial setup closes
-   as soon as the first admin is created.
+3. Visit `https://<your-service>.onrender.com/admin` and sign in with the admin
+   email and password. Admins use this separate login and dashboard; admin
+   credentials cannot sign in through the customer and courier page. Initial
+   setup closes as soon as the first admin is created.
 4. Remove `GDROP_ADMIN_SETUP_TOKEN` from Render only after confirming the
-   database is on persistent storage. Do not set `GDROP_SEED_DEMO=true` or
-   `GDROP_DEMO_OTP=true` on the public production service.
+   database is on persistent storage. Do not set `GDROP_SEED_DEMO=true` on
+   the public production service.
 
 The admin password cannot be recovered by the app; save it in a password
 manager. Render's free web-service filesystem is ephemeral. If the SQLite
@@ -75,17 +100,12 @@ GDROP_SEED_DEMO=true
 GDROP_DB=/var/data/gdrop-staging.db
 GDROP_STAGING_USERNAME=your-private-staging-username
 GDROP_STAGING_PASSWORD=a-long-unique-random-password
-GDROP_STAGING_SKIP_PHONE_OTP=true
 ```
 
-Do not add Daraja or SMS credentials to the demo staging service: it uses
-simulated payments and demo OTPs. The app requires HTTP Basic authentication
-for every staging page and API request, so share both the staging URL and its
-access credentials only with trusted testers. With
-`GDROP_STAGING_SKIP_PHONE_OTP=true`, staging signups immediately create a test
-account and session so you can test orders without entering an SMS code. This
-marks the test account's phone as verified only in staging. Do not set this
-variable on production; live signups continue to require SMS verification.
+Do not add Daraja credentials to the demo staging service: it uses simulated
+payments. The app requires HTTP Basic authentication for every staging page
+and API request, so share both the staging URL and its access credentials only
+with trusted testers.
 
 Demo accounts are seeded outside production:
 
@@ -102,16 +122,14 @@ never use demo credentials for a live deployment.
 
 ## Included backend flows
 
-- SQLite-backed accounts, scrypt password hashes, bearer sessions with a
-  20-minute idle timeout, OTP verification, and self-service account erasure.
+- Email-based signup, SQLite-backed accounts, scrypt password hashes, bearer
+  sessions with a 20-minute idle timeout, and self-service account erasure.
 - Server-calculated order fares: KES 150 base + KES 35/km, KES 250 minimum,
   shopping commission, extra-stop fees, weight surcharges, and tips.
 - Customer order tracking, courier dispatch/acceptance, status transitions,
   delivery PINs, shopping receipt uploads, variance approvals, and GPS updates.
 - M-Pesa STK push and callback support when Daraja credentials are configured;
   otherwise, local payments run in simulation mode.
-- Africa's Talking OTP delivery when credentials are configured; otherwise
-  the signup response includes a demo verification code.
 - Server-Sent Events for order updates, plus the frontend polling fallback.
 - Admin dispatch overview, courier approval, and user erasure.
 
@@ -130,24 +148,18 @@ MPESA_CALLBACK_URL=https://your-public-host/api/mpesa/callback
 MPESA_CALLBACK_TOKEN=use-a-long-random-secret
 MPESA_ENV=sandbox
 MPESA_TRANSACTION_TYPE=CustomerBuyGoodsOnline
-AT_API_KEY=
-AT_USERNAME=
-AT_SENDER_ID=
 ```
 
-For phone verification, configure Africa's Talking credentials. The account is
-created only after its 6-digit SMS code is verified; orders and M-Pesa payments
-are blocked for unverified phone numbers. In local development, missing SMS
-credentials enable a visible demo code. On production, signup fails closed
-unless SMS is configured; `GDROP_DEMO_OTP=true` is only for explicitly
-authorized testing and must not be used by a public service.
+Accounts are created with the supplied email and password; phone numbers are
+not verified during signup. The phone number is retained for M-Pesa payment
+prompts.
 
 Set `NODE_ENV=production` in the hosting provider's environment settings so
 production safeguards are enabled.
 
 For real M-Pesa payments, configure all Daraja variables with a valid callback
 URL reachable over HTTPS and a long random callback token. The STK prompt is
-sent to the account's verified phone number. Without Daraja settings, local
+sent to the phone number on the account. Without Daraja settings, local
 payments run in simulation mode and no money moves. Partial provider
 configuration is reported as an error instead of silently switching to demo
 mode.

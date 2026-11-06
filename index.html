@@ -117,10 +117,10 @@
         <button id="nav-btn-rider" onclick="app.setPortalView('rider')" class="portal-tab px-3 sm:px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 transition">
           <i class="fa-solid fa-motorcycle sm:mr-1.5 text-amber-500"></i><span class="hidden sm:inline">Courier Radar</span>
         </button>
-        <button id="nav-btn-admin" onclick="app.setPortalView('admin')" class="portal-tab px-3 sm:px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 transition">
-          <i class="fa-solid fa-shield-halved sm:mr-1.5 text-indigo-600"></i><span class="hidden sm:inline">Admin Hub</span>
-        </button>
       </div>
+      <a href="/admin" class="px-3 py-2 rounded-xl text-xs font-bold text-indigo-700 hover:bg-indigo-50 transition shrink-0" aria-label="Administrator sign in">
+        <i class="fa-solid fa-shield-halved sm:mr-1"></i><span class="hidden sm:inline">Admin</span>
+      </a>
 
       <!-- User Profile & Action Bar -->
       <div class="flex items-center space-x-3 shrink-0">
@@ -963,13 +963,13 @@
           <input type="email" id="auth-email" required value="" placeholder="e.g. name@gdrop.co.ke" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
         </div>
 
-        <!-- Phone (Kenyan 10 digits to +254) -->
+        <!-- Phone used for M-Pesa payment prompts; not verified during signup -->
         <div id="field-signup-phone" class="hidden">
           <label class="block text-xs font-bold text-slate-700 mb-1">
-            Kenyan Phone Number <span class="text-rose-500">*</span> <span class="text-[10px] text-slate-400 font-normal">(10 digits starting with 07 or 01)</span>
+            Phone Number for M-Pesa Payments <span class="text-rose-500">*</span> <span class="text-[10px] text-slate-400 font-normal">(10 digits starting with 07 or 01; not verified)</span>
           </label>
           <input type="tel" id="auth-phone" maxlength="10" value="" placeholder="e.g. 0712345678" oninput="app.liveValidatePhone(this)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
-          <p id="phone-normalized-preview" class="text-[11px] text-slate-500 mt-1">Normalized to: <strong class="text-brand-700 font-mono">+254...</strong></p>
+          <p id="phone-normalized-preview" class="text-[11px] text-slate-500 mt-1">Used for payment prompts only. Normalized to: <strong class="text-brand-700 font-mono">+254...</strong></p>
         </div>
 
         <!-- COURIER VETTING EXTRA FIELDS -->
@@ -1013,7 +1013,6 @@
           <select id="auth-role" onchange="app.handleRoleChangeInAuth(this)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-500">
             <option value="customer">Customer (Homa Bay Client)</option>
             <option value="rider">GDrop Courier / Rider (Requires Vetting)</option>
-            <option value="admin">System Operations Administrator</option>
           </select>
         </div>
 
@@ -1032,7 +1031,6 @@
           <div class="font-bold text-slate-700">Demo accounts (tap to fill)</div>
           <button type="button" onclick="app.fillDemo('george@gdrop.co.ke','Password123')" class="block hover:text-brand-700 underline">Customer: george@gdrop.co.ke / Password123</button>
           <button type="button" onclick="app.fillDemo('jared@gdrop.co.ke','RiderPass1')" class="block hover:text-brand-700 underline">Courier: jared@gdrop.co.ke / RiderPass1</button>
-          <button type="button" onclick="app.fillDemo('admin@gdrop.co.ke','AdminPass2026')" class="block hover:text-brand-700 underline">Admin: admin@gdrop.co.ke / AdminPass2026</button>
         </div>
       </form>
     </div>
@@ -1139,29 +1137,6 @@
     </div>
   </div>
 
-  <!-- SMS OTP VERIFICATION MODAL -->
-  <div id="modal-otp" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
-      <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl font-bold">
-        <i class="fa-solid fa-comment-sms"></i>
-      </div>
-      <div>
-        <h3 class="font-display font-bold text-lg text-slate-900">SMS Verification</h3>
-        <p class="text-xs text-slate-500 mt-1">We sent a 6-digit verification code to <span id="otp-phone-display" class="font-bold text-slate-800"></span></p>
-      </div>
-
-      <div class="flex justify-center gap-2 py-2">
-        <input type="text" inputmode="numeric" maxlength="6" id="otp-input" value="" placeholder="------" class="w-40 text-center tracking-[0.5em] text-lg font-black px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500">
-      </div>
-
-      <p id="otp-demo-hint" class="hidden text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2"></p>
-
-      <button id="otp-submit-btn" onclick="app.verifyOtpCode()" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs transition">
-        Validate & Complete Registration
-      </button>
-    </div>
-  </div>
-
   <!-- M-PESA STK PUSH INTERACTION MODAL -->
   <div id="modal-mpesa" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-5">
@@ -1172,7 +1147,7 @@
       <div>
         <span class="text-[10px] uppercase font-bold text-mpesa tracking-wider">Safaricom Daraja API • Homa Bay</span>
         <h3 id="mpesa-modal-title" class="font-display font-bold text-lg text-slate-900 mt-0.5">M-Pesa Payment</h3>
-        <p id="mpesa-modal-description" class="text-xs text-slate-500 mt-1">Your verified phone number will receive the payment prompt.</p>
+        <p id="mpesa-modal-description" class="text-xs text-slate-500 mt-1">The phone number on your account will receive the payment prompt.</p>
       </div>
 
       <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2 text-left">
@@ -1279,7 +1254,6 @@
         this.activeOrder = null;
         this.riderDash = null;
         this.adminData = null;
-        this.pendingOtp = null;
         this.pendingPayment = null;
         this.paymentPoll = null;
         this.lastVariancePrompt = null;
@@ -1360,6 +1334,13 @@
           this.token = saved;
           try {
             const { user } = await this.api('GET', '/api/me');
+            if (user.role === 'admin') {
+              sessionStorage.setItem('gdrop_admin_token', this.token);
+              safeStore.del('gdrop_token');
+              safeStore.del('gdrop_active_view');
+              window.location.replace('/admin');
+              return;
+            }
             await this.onSignedIn(user, { silent: true, restoreView: safeStore.get('gdrop_active_view') });
           } catch (e) {
             this.clearSession();
@@ -1961,7 +1942,7 @@
           if (roleSelect.value === 'admin') roleSelect.value = 'customer';
           if (roleSelect.value === 'rider') courierGroup.classList.remove('hidden');
           if (demo) demo.classList.add('hidden');
-          submitBtn.innerText = 'Agree & Send SMS Verification';
+          submitBtn.innerText = 'Agree & Create Account';
           tabSignup.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
           tabSignup.classList.remove('text-slate-600');
           tabLogin.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
@@ -2012,27 +1993,14 @@
             if (!body.nationalId || !body.plate || !body.licenseNo) return this.showToast('Vetting Info Missing', 'Please supply National ID, Bodaboda Plate, and Driving License number.', 'error');
           }
 
-          this.setBusy(submitBtn, true, 'Sending SMS');
+          this.setBusy(submitBtn, true, 'Creating account');
           try {
             const r = await this.api('POST', '/api/auth/signup', body);
-            if (r.phoneOtpSkipped && r.token && r.user) {
-              this.token = r.token;
-              this.closeAuthModal();
-              await this.onSignedIn(r.user, { silent: true });
-              this.showToast('Staging Account Created', 'Phone-code verification is skipped on protected staging only. Live production still requires SMS verification.', 'info');
-              return;
-            }
-            this.pendingOtp = r;
+            this.token = r.token;
             this.closeAuthModal();
-            document.getElementById('otp-phone-display').innerText = r.phone;
-            document.getElementById('otp-input').value = '';
-            const hint = document.getElementById('otp-demo-hint');
-            if (r.demoCode) {
-              hint.innerHTML = `SMS gateway is in demo mode, so no text was sent. Your code is <strong class="font-mono tracking-widest">${esc(r.demoCode)}</strong>.`;
-              hint.classList.remove('hidden');
-            } else hint.classList.add('hidden');
-            document.getElementById('modal-otp').classList.remove('hidden');
-            document.getElementById('otp-input').focus();
+            await this.onSignedIn(r.user, { silent: true });
+            const pending = r.user.role === 'rider' && r.user.vettingStatus !== 'VERIFIED';
+            this.showToast('Account Created', pending ? 'Account created. An administrator will vet your licence and plate before you can accept jobs.' : 'Your GDrop account is ready.', 'success');
           } catch (err) {
             this.showToast('Registration Failed', err.message, 'error');
           } finally {
@@ -2051,27 +2019,6 @@
           } finally {
             this.setBusy(submitBtn, false);
           }
-        }
-      }
-
-      async verifyOtpCode() {
-        const code = document.getElementById('otp-input').value.trim();
-        if (!/^\d{6}$/.test(code)) return this.showToast('Invalid OTP', 'Please enter the complete 6-digit confirmation code.', 'error');
-        if (!this.pendingOtp) return this.showToast('Start Again', 'Please complete the registration form first.', 'error');
-        const btn = document.getElementById('otp-submit-btn');
-        this.setBusy(btn, true, 'Verifying');
-        try {
-          const r = await this.api('POST', '/api/auth/verify-otp', { otpId: this.pendingOtp.otpId, code });
-          this.pendingOtp = null;
-          this.token = r.token;
-          document.getElementById('modal-otp').classList.add('hidden');
-          await this.onSignedIn(r.user, { silent: true });
-          const pending = r.user.role === 'rider' && r.user.vettingStatus !== 'VERIFIED';
-          this.showToast('Account Verified', pending ? 'Account created. An administrator will vet your licence and plate before you can accept jobs.' : 'SMS code confirmed. Your GDrop account is ready.', 'success');
-        } catch (err) {
-          this.showToast('Verification Failed', err.message, 'error');
-        } finally {
-          this.setBusy(btn, false);
         }
       }
 
@@ -2472,7 +2419,7 @@
         document.getElementById('mpesa-modal-title').innerText = sim ? 'M-Pesa Simulation' : 'M-Pesa Prompt Sent';
         document.getElementById('mpesa-modal-description').innerText = sim
           ? 'No payment will be made. Configure Daraja credentials to send a real STK prompt.'
-          : `Check your verified phone ${payment.phone} and enter your M-Pesa PIN on your handset.`;
+          : `Check phone ${payment.phone} and enter your M-Pesa PIN on your handset.`;
         document.getElementById('mpesa-modal-prompt').innerText = sim
           ? `Simulation only — KES ${Number(payment.amount).toFixed(0)} for order ${order.id}. No STK prompt was sent.`
           : `STK push accepted for ${payment.phone}. Confirm KES ${Number(payment.amount).toFixed(0)} on your phone.`;

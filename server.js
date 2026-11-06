@@ -25,10 +25,6 @@ db.exec(`
     token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     last_seen INTEGER NOT NULL, created_at INTEGER NOT NULL
   );
-  CREATE TABLE IF NOT EXISTS otps (
-    id TEXT PRIMARY KEY, payload TEXT NOT NULL, code_hash TEXT NOT NULL,
-    expires_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0
-  );
   CREATE TABLE IF NOT EXISTS orders (
     id TEXT PRIMARY KEY, customer_id TEXT NOT NULL REFERENCES users(id),
     rider_id TEXT REFERENCES users(id), service_type TEXT NOT NULL, direction TEXT,
@@ -59,7 +55,6 @@ db.exec(`
 const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map((column) => column.name));
 if (!userColumns.has('phone_verified_at')) {
   db.exec('ALTER TABLE users ADD COLUMN phone_verified_at INTEGER');
-  db.exec('UPDATE users SET phone_verified_at = created_at WHERE phone_verified_at IS NULL');
 }
 
 const tariff = {
@@ -75,7 +70,6 @@ const tariff = {
 };
 const MAX_RADIUS_KM = 40;
 const SESSION_IDLE_MS = 20 * 60 * 1000;
-const OTP_LIFETIME_MS = 10 * 60 * 1000;
 const events = new Map();
 const attempts = new Map();
 const adminSetupAttempts = new Map();
@@ -323,11 +317,11 @@ function ensureDemoAccounts() {
   const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users
     (id, name, email, phone, password_hash, role, national_id, plate, license_no, vetting_status, odpc_consent_at, phone_verified_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
   `);
   for (const user of seeds) {
     insertUser.run(id('usr'), user.name, user.email, user.phone, hashPassword(user.password), user.role,
-      user.nationalId || null, user.plate || null, user.licenseNo || null, user.vettingStatus || null, now(), now(), now());
+      user.nationalId || null, user.plate || null, user.licenseNo || null, user.vettingStatus || null, now(), now());
   }
   const customer = db.prepare('SELECT id FROM users WHERE email = ?').get('george@gdrop.co.ke');
   const rider = db.prepare('SELECT id FROM users WHERE email = ?').get('jared@gdrop.co.ke');
@@ -349,42 +343,6 @@ function ensureDemoAccounts() {
 }
 
 ensureDemoAccounts();
-
-async function sendOtp(phone, code) {
-  const hasApiKey = !!process.env.AT_API_KEY;
-  const hasUsername = !!process.env.AT_USERNAME;
-  if (!hasApiKey && !hasUsername) return false;
-  if (!hasApiKey || !hasUsername) fail(503, 'Africa\'s Talking configuration is incomplete.', 'SMS_CONFIG_INCOMPLETE');
-  let response;
-  let result;
-  try {
-    response = await fetch('https://api.africastalking.com/version1/messaging', {
-      method: 'POST',
-      headers: {
-        apiKey: process.env.AT_API_KEY,
-        Accept: 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        username: process.env.AT_USERNAME,
-        to: phone,
-        message: `Your GDrop verification code is ${code}. It expires in 10 minutes.`,
-        ...(process.env.AT_SENDER_ID ? { from: process.env.AT_SENDER_ID } : {}),
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-    result = await response.json();
-  } catch {
-    throw new HttpError(502, 'Could not reach the SMS provider. Please try again.', 'SMS_UNAVAILABLE');
-  }
-  const recipients = result.SMSMessageData?.Recipients;
-  const smsAccepted = Array.isArray(recipients) && recipients.length > 0 &&
-    recipients.every((recipient) => /^10[0-2]$/.test(String(recipient.statusCode)));
-  if (!response.ok || !smsAccepted) {
-    throw new HttpError(502, 'The SMS provider did not accept the verification message.', 'SMS_FAILED');
-  }
-  return true;
-}
 
 async function mpesaRequest(order, payment) {
   const keys = ['MPESA_CONSUMER_KEY', 'MPESA_CONSUMER_SECRET', 'MPESA_SHORTCODE', 'MPESA_PASSKEY', 'MPESA_CALLBACK_URL', 'MPESA_CALLBACK_TOKEN'];
@@ -541,6 +499,18 @@ app.get('/api/config', (_req, res) => {
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
+function serveAdminPage(_req, res) {
+  res.set({
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  });
+  res.sendFile(path.join(__dirname, 'admin.html'));
+}
+
+app.get(['/admin', '/admin/login'], serveAdminPage);
+
 function initialAdminSetupEnabled() {
   return process.env.NODE_ENV === 'production' &&
     typeof process.env.GDROP_ADMIN_SETUP_TOKEN === 'string' &&
@@ -614,7 +584,7 @@ app.post('/admin/setup', (req, res, next) => {
   }
 });
 
-app.post('/api/auth/signup', async (req, res, next) => {
+app.post('/api/auth/signup', (req, res, next) => {
   try {
     const body = req.body || {};
     const name = String(body.name || '').trim();
@@ -633,94 +603,53 @@ app.post('/api/auth/signup', async (req, res, next) => {
     if (role === 'rider' && (!body.nationalId?.trim?.() || !body.plate?.trim?.() || !body.licenseNo?.trim?.())) {
       fail(400, 'Courier registration requires National ID, vehicle plate, and licence number.', 'VETTING_REQUIRED');
     }
-    const otpId = id('otp');
-    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-    const stagingSkipOtp = process.env.NODE_ENV === 'staging' && process.env.GDROP_STAGING_SKIP_PHONE_OTP === 'true';
-    const smsConfigured = !!process.env.AT_API_KEY && !!process.env.AT_USERNAME;
-    const demoOtpAllowed = process.env.NODE_ENV !== 'production' || process.env.GDROP_DEMO_OTP === 'true';
-    if (!stagingSkipOtp && !smsConfigured && !demoOtpAllowed) {
-      fail(503, 'Phone verification is unavailable until SMS delivery is configured.', 'SMS_CONFIG_REQUIRED');
-    }
-    const payload = {
-      id: id('usr'), name, email, phone,
-      passwordHash: hashPassword(password), role,
-      nationalId: role === 'rider' ? String(body.nationalId).trim() : null,
-      plate: role === 'rider' ? String(body.plate).trim().toUpperCase() : null,
-      licenseNo: role === 'rider' ? String(body.licenseNo).trim() : null,
-    };
-    if (stagingSkipOtp) {
+    const userId = id('usr');
+    const timestamp = now();
+    const session = db.transaction(() => {
       db.prepare(`
         INSERT INTO users(id, name, email, phone, password_hash, role, national_id, plate,
           license_no, vetting_status, odpc_consent_at, phone_verified_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(payload.id, payload.name, payload.email, payload.phone, payload.passwordHash, payload.role,
-        payload.nationalId, payload.plate, payload.licenseNo,
-        payload.role === 'rider' ? 'PENDING_VETTING' : null,
-        now(), now(), now());
-      const session = createSession(db.prepare('SELECT * FROM users WHERE id = ?').get(payload.id));
-      return res.status(201).json({ ...session, phoneOtpSkipped: true });
-    }
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+      `).run(userId, name, email, phone, hashPassword(password), role,
+        role === 'rider' ? String(body.nationalId).trim() : null,
+        role === 'rider' ? String(body.plate).trim().toUpperCase() : null,
+        role === 'rider' ? String(body.licenseNo).trim() : null,
+        role === 'rider' ? 'PENDING_VETTING' : null, timestamp, timestamp);
+      return createSession(db.prepare('SELECT * FROM users WHERE id = ?').get(userId));
+    })();
+    res.status(201).json(session);
+  } catch (error) {
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return next(new HttpError(409, 'An account with that email already exists.', 'EMAIL_EXISTS'));
+    next(error);
+  }
+});
+
+function loginHandler(adminOnly) {
+  return (req, res, next) => {
     try {
-      await sendOtp(phone, code);
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      const key = `${req.ip}:${email}`;
+      const entry = attempts.get(key) || { count: 0, until: 0 };
+      if (entry.until > now() && entry.count >= 10) fail(429, 'Too many sign-in attempts. Try again later.', 'RATE_LIMITED');
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+      const passwordMatches = user && verifyPassword(String(req.body?.password || ''), user.password_hash);
+      const roleMatches = user && (adminOnly ? user.role === 'admin' : user.role !== 'admin');
+      if (!passwordMatches || !roleMatches) {
+        entry.count += 1;
+        if (entry.count >= 10) entry.until = now() + 15 * 60 * 1000;
+        attempts.set(key, entry);
+        fail(401, adminOnly ? 'Admin email or password is incorrect.' : 'Email or password is incorrect.', 'INVALID_CREDENTIALS');
+      }
+      attempts.delete(key);
+      res.json(createSession(user));
     } catch (error) {
-      return next(error);
+      next(error);
     }
-    db.prepare('INSERT INTO otps(id, payload, code_hash, expires_at) VALUES (?, ?, ?, ?)')
-      .run(otpId, JSON.stringify(payload), hash(code), now() + OTP_LIFETIME_MS);
-    res.status(201).json({
-      otpId,
-      phone,
-      ...(!smsConfigured ? { demoCode: code } : {}),
-    });
-  } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return next(new HttpError(409, 'An account with that email already exists.', 'EMAIL_EXISTS'));
-    next(error);
-  }
-});
+  };
+}
 
-app.post('/api/auth/verify-otp', (req, res, next) => {
-  try {
-    const otp = db.prepare('SELECT * FROM otps WHERE id = ?').get(String(req.body?.otpId || ''));
-    if (!otp || otp.expires_at < now() || otp.attempts >= 5) fail(400, 'That verification code expired. Please register again.', 'OTP_EXPIRED');
-    if (hash(String(req.body?.code || '')) !== otp.code_hash) {
-      db.prepare('UPDATE otps SET attempts = attempts + 1 WHERE id = ?').run(otp.id);
-      fail(400, 'That verification code is incorrect.', 'OTP_INVALID');
-    }
-    const user = JSON.parse(otp.payload);
-    db.prepare(`
-      INSERT INTO users(id, name, email, phone, password_hash, role, national_id, plate,
-        license_no, vetting_status, odpc_consent_at, phone_verified_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(user.id, user.name, user.email, user.phone, user.passwordHash, user.role,
-      user.nationalId, user.plate, user.licenseNo, user.role === 'rider' ? 'PENDING_VETTING' : null, now(), now(), now());
-    db.prepare('DELETE FROM otps WHERE id = ?').run(otp.id);
-    const result = createSession(db.prepare('SELECT * FROM users WHERE id = ?').get(user.id));
-    res.status(201).json(result);
-  } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return next(new HttpError(409, 'An account with that email already exists.', 'EMAIL_EXISTS'));
-    next(error);
-  }
-});
-
-app.post('/api/auth/login', (req, res, next) => {
-  try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const key = `${req.ip}:${email}`;
-    const entry = attempts.get(key) || { count: 0, until: 0 };
-    if (entry.until > now() && entry.count >= 10) fail(429, 'Too many sign-in attempts. Try again later.', 'RATE_LIMITED');
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-    if (!user || !verifyPassword(String(req.body?.password || ''), user.password_hash)) {
-      entry.count += 1;
-      if (entry.count >= 10) entry.until = now() + 15 * 60 * 1000;
-      attempts.set(key, entry);
-      fail(401, 'Email or password is incorrect.', 'INVALID_CREDENTIALS');
-    }
-    attempts.delete(key);
-    res.json(createSession(user));
-  } catch (error) {
-    next(error);
-  }
-});
+app.post('/api/auth/login', loginHandler(false));
+app.post('/api/admin/login', loginHandler(true));
 
 app.use('/api', authenticate);
 
@@ -744,7 +673,6 @@ app.delete('/api/me', requireRole('customer', 'rider'), (req, res) => {
 
 app.post('/api/orders', requireRole('customer'), async (req, res, next) => {
   try {
-    if (!req.user.phone_verified_at) fail(403, 'Verify your phone number before placing an order.', 'PHONE_NOT_VERIFIED');
     const body = req.body || {};
     const priced = priceOrder(body);
     const paymentMethod = body.paymentMethod === 'mpesa_pod' ? 'mpesa_pod' : 'mpesa_prepay';
@@ -824,7 +752,6 @@ app.get('/api/orders/:id', (req, res, next) => {
 
 app.post('/api/orders/:id/pay', requireRole('customer'), async (req, res, next) => {
   try {
-    if (!req.user.phone_verified_at) fail(403, 'Verify your phone number before requesting payment.', 'PHONE_NOT_VERIFIED');
     const order = authorizedOrder(req, req.params.id);
     if (order.status !== 'pending_payment') fail(400, 'This order is not awaiting payment.', 'INVALID_ORDER_STATE');
     const payment = await startPayment({ ...order, phone: req.user.phone });

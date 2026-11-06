@@ -6,7 +6,7 @@ const Database = require('better-sqlite3');
 
 const email = String(process.env.GDROP_ADMIN_EMAIL || '').trim().toLowerCase();
 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-  console.error('Set GDROP_ADMIN_EMAIL to the email address of your verified customer account.');
+  console.error('Set GDROP_ADMIN_EMAIL to the email address of your customer account.');
   process.exit(1);
 }
 
@@ -18,9 +18,8 @@ try {
 
   const promote = db.transaction(() => {
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-    if (!user) throw new Error(`No account found for ${email}. Sign up and verify its phone number first.`);
+    if (!user) throw new Error(`No account found for ${email}. Sign up first.`);
     if (user.role !== 'customer') throw new Error('Only a customer account can be promoted to admin.');
-    if (!user.phone_verified_at) throw new Error('Verify this account phone number before promoting it.');
     if (!user.odpc_consent_at) throw new Error('The account must have recorded signup consent before promotion.');
     const admin = db.prepare("SELECT email FROM users WHERE role = 'admin' LIMIT 1").get();
     if (admin) throw new Error(`An admin account already exists (${admin.email}). Promotion is limited to the initial bootstrap.`);
@@ -28,7 +27,7 @@ try {
     return user.email;
   });
 
-  console.log(`Promoted verified account ${promote()} to admin.`);
+  console.log(`Promoted account ${promote()} to admin.`);
 } catch (error) {
   console.error(`Admin promotion failed: ${error.message}`);
   process.exitCode = 1;
